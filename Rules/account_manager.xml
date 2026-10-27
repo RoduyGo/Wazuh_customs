@@ -1,0 +1,218 @@
+<!-- 60109 (0580-win-security_rules.xml): Event 4720, 4722, tạo hoặc bật tài khoản Windows. -->
+<!-- 60111 (0580-win-security_rules.xml): Event 4725, 4726, vô hiệu hóa hoặc xóa tài khoản Windows. -->
+<!-- 60103 (0580-win-security_rules.xml): Rule nền của log Security Windows (level 0), dùng cho Event 4722, 4724, 4781 và 4688. -->
+<!-- 60154 (0580-win-security_rules.xml): Event 4732, thêm thành viên vào nhóm Administrators cục bộ. -->
+<!-- 60159 (0580-win-security_rules.xml): Event 4728, thêm thành viên vào nhóm Domain Admins. -->
+<!-- sysmon_event1 (nhóm Sysmon): Sysmon Event 1, tạo tiến trình mới. -->
+<!-- 5902 (0020-syslog_rules.xml): Linux có tài khoản mới được tạo (useradd). -->
+<!-- 5903 (0020-syslog_rules.xml): Linux có tài khoản bị xóa (userdel). -->
+<!-- 550 (0015-ossec_rules.xml): FIM báo tệp bị sửa nội dung, dùng cho /etc/passwd, /etc/shadow, /etc/group. -->
+
+<group name="local,account_management,">
+<rule id="100123" level="13"><if_sid>5715</if_sid> ... </rule>
+  <!-- Windows: rule nền tạo, vô hiệu hóa, xóa tài khoản -->
+  <rule id="100300" level="8">
+    <if_sid>60109</if_sid>
+    <field name="win.system.eventID">^4720$</field>
+    <description>NOTICE: Windows user account $(win.eventdata.targetUserName) created by $(win.eventdata.subjectUserName).</description>
+    <options>no_full_log</options>
+    <group>soc_acct_change_win,soc_acct_created_win,</group>
+    <mitre>
+      <id>T1136</id>
+    </mitre>
+  </rule>
+
+
+  <rule id="100301" level="8">
+    <if_sid>60111</if_sid>
+    <field name="win.system.eventID">^4725$|^4726$</field>
+    <description>NOTICE: Windows user account $(win.eventdata.targetUserName) disabled or deleted (event $(win.system.eventID)) by $(win.eventdata.subjectUserName).</description>
+    <options>no_full_log</options>
+    <group>soc_acct_change_win,</group>
+    <mitre>
+      <id>T1531</id>
+    </mitre>
+  </rule>
+
+
+  <!-- Windows: các trường hợp nâng level -->
+  <rule id="100302" level="12">
+    <if_sid>100300</if_sid>
+    <field name="win.eventdata.targetUserName" type="pcre2">\$$</field>
+    <description>WARNING: Hidden Windows user account $(win.eventdata.targetUserName) (name ends with $) created by $(win.eventdata.subjectUserName).</description>
+    <options>no_full_log</options>
+    <group>soc_acct_change_win,soc_acct_created_win,</group>
+    <mitre>
+      <id>T1136.001</id>
+      <id>T1564.002</id>
+    </mitre>
+  </rule>
+
+
+  <rule id="100303" level="10">
+    <if_sid>100300</if_sid>
+    <list field="win.eventdata.subjectUserName" lookup="not_match_key">etc/lists/soc-account-admins</list>
+    <description>NOTICE: Windows user account $(win.eventdata.targetUserName) created by $(win.eventdata.subjectUserName), who is not an approved account administrator.</description>
+    <options>no_full_log</options>
+    <group>soc_acct_change_win,soc_acct_created_win,</group>
+    <mitre>
+      <id>T1136</id>
+    </mitre>
+  </rule>
+
+
+  <rule id="100304" level="10">
+    <if_sid>100301</if_sid>
+    <list field="win.eventdata.subjectUserName" lookup="not_match_key">etc/lists/soc-account-admins</list>
+    <description>NOTICE: Windows user account $(win.eventdata.targetUserName) disabled or deleted by $(win.eventdata.subjectUserName), who is not an approved account administrator.</description>
+    <options>no_full_log</options>
+    <group>soc_acct_change_win,</group>
+    <mitre>
+      <id>T1531</id>
+    </mitre>
+  </rule>
+
+
+  <rule id="100305" level="12">
+    <if_sid>100301</if_sid>
+    <list field="win.eventdata.targetUserName" lookup="match_key">etc/lists/soc-privileged-accounts</list>
+    <description>WARNING: Privileged account $(win.eventdata.targetUserName) disabled or deleted (event $(win.system.eventID)) by $(win.eventdata.subjectUserName).</description>
+    <options>no_full_log</options>
+    <group>soc_acct_change_win,</group>
+    <mitre>
+      <id>T1531</id>
+    </mitre>
+  </rule>
+
+
+  <rule id="100306" level="12" frequency="5" timeframe="600">
+    <if_matched_group>soc_acct_change_win</if_matched_group>
+    <same_field>win.eventdata.subjectUserName</same_field>
+    <same_field>win.system.eventID</same_field>
+    <description>WARNING: $(win.eventdata.subjectUserName) created, disabled or deleted 5 user accounts in 10 minutes (last event $(win.system.eventID)).</description>
+    <options>no_full_log</options>
+    <mitre>
+      <id>T1136</id>
+      <id>T1531</id>
+    </mitre>
+  </rule>
+
+
+  <rule id="100307" level="12">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^4722$|^4724$|^4781$</field>
+    <field name="win.eventdata.targetSid" type="pcre2">-500$</field>
+    <description>WARNING: Built-in Administrator account (RID 500) enabled, password reset or renamed (event $(win.system.eventID)) by $(win.eventdata.subjectUserName).</description>
+    <options>no_full_log</options>
+    <mitre>
+      <id>T1098</id>
+      <id>T1078.001</id>
+    </mitre>
+  </rule>
+
+
+  <rule id="100308" level="13" timeframe="600">
+    <if_sid>60154,60159</if_sid>
+    <if_matched_group>soc_acct_created_win</if_matched_group>
+    <same_field>win.eventdata.subjectUserName</same_field>
+    <field name="win.system.eventID">^4732$|^4728$</field>
+    <description>WARNING: $(win.eventdata.subjectUserName) created a user account and then added a member to Administrators or Domain Admins within 10 minutes.</description>
+    <options>no_full_log</options>
+    <mitre>
+      <id>T1136</id>
+      <id>T1098</id>
+    </mitre>
+  </rule>
+
+
+  <!-- Windows: tạo/xóa tài khoản bằng dòng lệnh -->
+  <rule id="100309" level="10">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^4688$</field>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)\bnet1?(\.exe)?["']?\s+user\s.*/(add|del)|New-LocalUser|Remove-LocalUser|New-ADUser|Remove-ADUser|\bdsadd(\.exe)?["']?\s+user\b</field>
+    <description>NOTICE: User account created or deleted from the command line by $(win.eventdata.subjectUserName) (event 4688).</description>
+    <options>no_full_log</options>
+    <mitre>
+      <id>T1136</id>
+      <id>T1531</id>
+    </mitre>
+  </rule>
+
+
+  <rule id="100310" level="10">
+    <if_group>sysmon_event1</if_group>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)\bnet1?(\.exe)?["']?\s+user\s.*/(add|del)|New-LocalUser|Remove-LocalUser|New-ADUser|Remove-ADUser|\bdsadd(\.exe)?["']?\s+user\b</field>
+    <description>NOTICE: User account created or deleted from the command line by $(win.eventdata.user) (Sysmon event 1).</description>
+    <options>no_full_log</options>
+    <mitre>
+      <id>T1136</id>
+      <id>T1531</id>
+    </mitre>
+  </rule>
+
+
+  <!-- Linux -->
+  <rule id="100311" level="12">
+    <if_sid>5902</if_sid>
+    <regex type="pcre2">UID=0,</regex>
+    <description>WARNING: Linux account $(dstuser) created with UID 0 (root privileges).</description>
+    <mitre>
+      <id>T1136.001</id>
+    </mitre>
+  </rule>
+
+
+  <rule id="100312" level="12">
+    <decoded_as>useradd</decoded_as>
+    <regex type="pcre2">^add '\S+' to (shadow )?group '(sudo|wheel|admin)'$</regex>
+    <description>WARNING: Linux account created directly in an administrator group (sudo, wheel or admin) with useradd.</description>
+    <mitre>
+      <id>T1136.001</id>
+      <id>T1098</id>
+    </mitre>
+  </rule>
+
+
+  <rule id="100313" level="12">
+    <program_name>^usermod$</program_name>
+    <regex type="pcre2">^change user '\S+' UID from '\d+' to '0'$</regex>
+    <description>WARNING: Existing Linux account changed to UID 0 (root privileges) with usermod.</description>
+    <mitre>
+      <id>T1098</id>
+    </mitre>
+  </rule>
+
+
+  <rule id="100314" level="8">
+    <if_sid>5903</if_sid>
+    <program_name>^userdel$</program_name>
+    <description>NOTICE: Linux user account deleted with userdel.</description>
+    <group>soc_acct_del_linux,</group>
+    <mitre>
+      <id>T1531</id>
+    </mitre>
+  </rule>
+
+
+  <rule id="100315" level="12" frequency="5" timeframe="600">
+    <if_matched_group>soc_acct_del_linux</if_matched_group>
+    <description>WARNING: 5 Linux user accounts deleted on the same host in 10 minutes.</description>
+    <mitre>
+      <id>T1531</id>
+    </mitre>
+  </rule>
+
+
+  <rule id="100316" level="12">
+    <if_sid>550</if_sid>
+    <field name="file" type="pcre2">^/etc/(passwd|shadow|group|gshadow)$</field>
+    <field name="process_name" type="pcre2" negate="yes">/(useradd|usermod|userdel|groupadd|groupmod|groupdel|gpasswd|passwd|chpasswd|chage|chfn|chsh|newusers|systemd-sysusers)$</field>
+    <description>WARNING: $(file) modified directly by $(process_name), not by an account management tool.</description>
+    <mitre>
+      <id>T1136.001</id>
+      <id>T1098</id>
+    </mitre>
+  </rule>
+
+
+</group>
