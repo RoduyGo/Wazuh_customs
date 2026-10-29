@@ -1,0 +1,174 @@
+<!-- 506 (0015-ossec_rules.xml): Agent thoát êm (Agent stopped), do remoted sinh khi nhận thông điệp thoát, level 3. -->
+<!-- 504 (0015-ossec_rules.xml): Agent mất kết nối (Agent disconnected), do monitord sinh sau khoảng chờ mặc định 15 phút, level 3. -->
+<!-- 61603: Sysmon Event 1, tạo tiến trình mới, có dòng lệnh. -->
+<!-- 91802: PowerShell Event 4104, nội dung script block. -->
+<!-- 61104 (0590-win-system_rules.xml): Event 7040, kiểu khởi động của dịch vụ bị đổi. -->
+<!-- 550, 553, 554 (0015-ossec_rules.xml): FIM báo tệp bị sửa nội dung (550), bị xóa (553), tệp mới (554). -->
+<!-- 5400: Rule nền của log sudo, dùng để đọc lệnh chạy qua sudo. -->
+<!-- 40700: Nhóm systemd (level 0), dùng để bắt dịch vụ Linux thoát do kill hoặc crash. -->
+<group name="local,wz_tamper,">
+
+
+  <!-- 506: agent thoát êm trên máy chủ quan trọng -->
+  <rule id="100380" level="10">
+    <if_sid>506</if_sid>
+    <list field="hostname" lookup="match_key">etc/lists/soc-critical-agents</list>
+    <description>NOTICE: Wazuh agent stopped cleanly on a critical host</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>soc_wz_stop,</group>
+  </rule>
+
+
+  <!-- 504: agent ngắt kết nối trên máy chủ quan trọng -->
+  <rule id="100381" level="10">
+    <if_sid>504</if_sid>
+    <list field="hostname" lookup="match_key">etc/lists/soc-critical-agents</list>
+    <description>NOTICE: Wazuh agent on a critical host disconnected from the manager</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>soc_wz_gone,</group>
+  </rule>
+
+
+  <!-- 504 còn lại: chỉ để gắn nhóm cho rule đếm, thay 504 trong cảnh báo -->
+  <rule id="100382" level="3">
+    <if_sid>504</if_sid>
+    <description>INFO: Wazuh agent disconnected from the manager</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>soc_wz_gone,</group>
+  </rule>
+
+
+  <!-- Nhiều agent ngắt kết nối cùng lúc -->
+  <rule id="100383" level="12" frequency="5" timeframe="600">
+    <if_matched_group>soc_wz_gone</if_matched_group>
+    <global_frequency />
+    <description>WARNING: Five or more Wazuh agents disconnected within 10 minutes (network outage, manager issue or coordinated tampering)</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>soc_wz_mass_gone,</group>
+  </rule>
+
+
+  <!-- Sysmon Event 1: dừng, vô hiệu hóa, kill hoặc gỡ agent trên Windows -->
+  <rule id="100384" level="12">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)(\b(net1?|sc)(\.exe)?["']?\s+(stop|pause|delete|failure)\s+["']?(WazuhSvc|Wazuh|OssecSvc)["']?(\s|$)|\bsc(\.exe)?\s+config\s+["']?(WazuhSvc|OssecSvc)["']?\s+start\s*=\s*(disabled|demand)|\b(Stop|Remove)-Service\b.*\b(WazuhSvc|Wazuh|OssecSvc)\b|\bSet-Service\b.*\b(WazuhSvc|OssecSvc)\b.*-StartupType\s+(Disabled|Manual)|\b(taskkill|Stop-Process)\b.*\bwazuh-agent|\bmsiexec(\.exe)?\b.*\s/(x|uninstall)\b.*wazuh|\bwmic\b.*\bproduct\b.*\bwazuh\b.*\buninstall\b|\bUninstall-Package\b.*\bwazuh)</field>
+    <description>WARNING: Command line stops, disables, kills or uninstalls the Wazuh agent</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>soc_wz_tamper_win,</group>
+  </rule>
+
+
+  <!-- PowerShell Event 4104: cùng hành vi trong script block -->
+  <rule id="100385" level="12">
+    <if_sid>91802</if_sid>
+    <field name="win.eventdata.scriptBlockText" type="pcre2">(?is)(\b(Stop|Remove)-Service\b.{0,200}?\b(WazuhSvc|Wazuh|OssecSvc)\b|\bSet-Service\b.{0,200}?\b(WazuhSvc|OssecSvc)\b.{0,200}?-StartupType\s+(Disabled|Manual)|\b(taskkill|Stop-Process)\b.{0,200}?\bwazuh-agent|\bUninstall-Package\b.{0,200}?\bwazuh|\bwmic\b.{0,200}?\bproduct\b.{0,200}?\bwazuh\b.{0,200}?\buninstall\b)</field>
+    <description>WARNING: PowerShell script block stops, disables or uninstalls the Wazuh agent</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>soc_wz_tamper_win,</group>
+  </rule>
+
+
+  <!-- System Event 7040: dịch vụ Wazuh đổi kiểu khởi động sang disabled (định dạng thông điệp chưa kiểm chứng) -->
+  <rule id="100386" level="12">
+    <if_sid>61104</if_sid>
+    <field name="win.eventdata.param1" type="pcre2">(?i)^(Wazuh|WazuhSvc)$</field>
+    <field name="win.system.message" type="pcre2">(?i)changed from .+ to disabled</field>
+    <description>WARNING: Startup type of the Wazuh agent service changed to disabled</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>soc_wz_tamper_win,</group>
+  </rule>
+
+
+  <!-- FIM: tệp cấu hình hoặc khóa của agent bị sửa, thêm, xóa -->
+  <rule id="100387" level="12">
+    <if_sid>550,553,554</if_sid>
+    <field name="file" type="pcre2">(?i)([\\/]+(ossec-agent|wazuh-agent)|[\\/]+var[\\/]+ossec[\\/]+etc)[\\/]+(ossec\.conf|client\.keys|local_internal_options\.conf)$</field>
+    <description>WARNING: Wazuh agent configuration or key file changed: $(file)</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>soc_wz_cfg_tamper,</group>
+  </rule>
+
+
+  <!-- Linux: lệnh sudo dừng, vô hiệu hóa, kill hoặc gỡ agent -->
+  <rule id="100388" level="10">
+    <if_sid>5400</if_sid>
+    <field name="command" type="pcre2">(?i)(\bsystemctl\s+(stop|disable|mask|kill)\s+wazuh-agent\b|\bservice\s+wazuh-agent\s+stop\b|\b(wazuh|ossec)-control\s+stop\b|\b(pkill|killall)\b.*\bwazuh-|\b(apt|apt-get|dpkg|yum|dnf|rpm)\b.*\s(remove|purge|erase|-e|-r|-P)\s.*\bwazuh-agent\b)</field>
+    <description>NOTICE: Sudo command stops, disables, kills or removes the Wazuh agent: $(command)</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>soc_wz_tamper_linux,</group>
+  </rule>
+
+
+  <!-- Linux: systemd báo wazuh-agent thoát do tín hiệu hoặc crash (có thể không bắn khi chỉ kill một daemon con, chưa kiểm chứng) -->
+  <rule id="100389" level="10">
+    <if_sid>40700</if_sid>
+    <regex type="pcre2">(?i)\bwazuh-agent\.service: (Main process exited, code=(killed|dumped)|Failed with result '(signal|core-dump|watchdog)')</regex>
+    <description>NOTICE: Wazuh agent service on Linux exited by signal or crash according to systemd</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>soc_wz_tamper_linux,</group>
+  </rule>
+
+
+  <!-- Sysmon Event 1: quy tắc Windows Firewall chặn đường tới manager -->
+  <rule id="100390" level="12">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)^(?=.*\b(netsh(\.exe)?\s+advfirewall|New-NetFirewallRule)\b)(?=.*(\baction\s*=\s*block\b|-Action\s+Block\b))(?=.*(\b1514\b|\b1515\b|\bwazuh|\bossec|\b192\.168\.88\.245\b))</field>
+    <description>WARNING: Command line creates a Windows Firewall block rule for Wazuh agent traffic or the manager address</description>
+    <mitre>
+      <id>T1562.004</id>
+    </mitre>
+    <group>soc_wz_tamper_win,</group>
+  </rule>
+
+
+  <!-- Linux: lệnh sudo tạo quy tắc chặn tới manager -->
+  <rule id="100391" level="12">
+    <if_sid>5400</if_sid>
+    <field name="command" type="pcre2">(?i)^(?=.*\b(iptables|ip6tables|nft|ufw)\b)(?=.*\b(DROP|REJECT|deny)\b)(?=.*(\b1514\b|\b1515\b|\b192\.168\.88\.245\b))</field>
+    <description>WARNING: Sudo command creates a firewall block rule for Wazuh agent traffic or the manager address: $(command)</description>
+    <mitre>
+      <id>T1562.004</id>
+    </mitre>
+    <group>soc_wz_tamper_linux,</group>
+  </rule>
+
+
+  <!-- Ngoại lệ Windows: máy đang bảo trì có kế hoạch. Đặt cuối khối vì cha phải nạp trước -->
+  <rule id="100392" level="3">
+    <if_sid>100384,100385</if_sid>
+    <list field="hostname" lookup="match_key">etc/lists/soc-agent-maint-hosts</list>
+    <description>INFO: Wazuh agent stop or uninstall command on a host listed as under planned maintenance</description>
+    <group>soc_wz_expected_stop,</group>
+  </rule>
+
+
+  <!-- Ngoại lệ Linux: tài khoản được phép dừng hoặc gỡ agent -->
+  <rule id="100393" level="3">
+    <if_sid>100388</if_sid>
+    <list field="srcuser" lookup="match_key">etc/lists/soc-agent-admins</list>
+    <description>INFO: Wazuh agent stop or removal by an account listed in soc-agent-admins: $(command)</description>
+    <group>soc_wz_expected_stop,</group>
+  </rule>
+
+
+</group>

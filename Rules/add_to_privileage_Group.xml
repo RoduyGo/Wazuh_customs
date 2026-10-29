@@ -1,0 +1,182 @@
+<!-- 60154 (0580-win-security_rules.xml): Event 4732, thêm thành viên vào Administrators cục bộ, cũng bắn khi gỡ. -->
+<!-- 60159 (0580-win-security_rules.xml): Event 4728, thêm thành viên vào Domain Admins, cũng bắn khi gỡ. -->
+<!-- 60166, 60167 (0580-win-security_rules.xml): Event 4756, thêm thành viên vào Schema Admins và Enterprise Admins. -->
+<!-- 60173, 60174, 60175, 60176 (0580-win-security_rules.xml): Thêm thành viên vào nhóm Account, Server, Backup, Print Operators, cũng bắn khi gỡ. -->
+<!-- 60141, 60144, 60151 (0580-win-security_rules.xml): Rule cha của sự kiện thêm thành viên vào nhóm global (4728), cục bộ (4732), universal (4756). -->
+<!-- 61603: Sysmon Event 1, tạo tiến trình mới. -->
+<!-- 67027 (0955-WEF-baseline_rules.xml): Security Event 4688, tạo tiến trình mới. -->
+<!-- 91802: PowerShell Event 4104, nội dung script block. -->
+<!-- 2960: Decoder gpasswd, dòng "added by", điền dstuser, srcuser, group. -->
+<!-- 5400: Rule nền của log sudo, dùng để đọc lệnh chạy qua sudo. -->
+<!-- 550, 554 (0015-ossec_rules.xml): FIM báo tệp bị sửa nội dung (550) hoặc tệp mới (554). -->
+<group name="local,soc_privgrp_win,">
+  <!-- Thêm thành viên vào nhóm đặc quyền (4732, 4728), người thêm không thuộc soc-account-admins -->
+  <rule id="100320" level="12">
+    <if_sid>60154,60159,60173,60174,60175,60176</if_sid>
+    <field name="win.system.eventID">^4732$|^4728$</field>
+    <list field="win.eventdata.subjectUserName" lookup="not_match_key">etc/lists/soc-account-admins</list>
+    <description>WARNING: Member $(win.eventdata.memberSid) added to privileged group $(win.eventdata.targetUserName) by $(win.eventdata.subjectUserName)</description>
+    <group>soc_privgrp_add_win,</group>
+    <mitre>
+      <id>T1098.007</id>
+    </mitre>
+  </rule>
+
+
+  <!-- Enterprise Admins và Schema Admins (4756), không áp dụng danh sách cho phép -->
+  <rule id="100321" level="14">
+    <if_sid>60166,60167</if_sid>
+    <field name="win.system.eventID">^4756$</field>
+    <description>WARNING: Member $(withen.eventdata.memberSid) added to forest-level group $(win.eventdata.targetUserName) by $(win.eventdata.subjectUserName)</description>
+    <group>soc_privgrp_add_win,</group>
+    <mitre>
+      <id>T1098.007</id>
+    </mitre>
+  </rule>
+
+
+  <!-- Người thêm thuộc soc-account-admins: giữ vết ở level thấp -->
+  <rule id="100322" level="6">
+    <if_sid>60154,60159,60173,60174,60175,60176</if_sid>
+    <field name="win.system.eventID">^4732$|^4728$</field>
+    <list field="win.eventdata.subjectUserName" lookup="match_key">etc/lists/soc-account-admins</list>
+    <description>INFO: Member $(win.eventdata.memberSid) added to privileged group $(win.eventdata.targetUserName) by approved account admin $(win.eventdata.subjectUserName)</description>
+    <group>soc_privgrp_add_win,</group>
+    <mitre>
+      <id>T1098.007</id>
+    </mitre>
+  </rule>
+
+
+  <!-- Gỡ thành viên (4733, 4729, 4757): hạ từ level 8 đến 12 của rule có sẵn xuống 8 -->
+  <rule id="100323" level="8">
+    <if_sid>60154,60159,60166,60167,60173,60174,60175,60176</if_sid>
+    <field name="win.system.eventID">^4733$|^4729$|^4757$</field>
+    <description>NOTICE: Member $(win.eventdata.memberSid) removed from privileged group $(win.eventdata.targetUserName) by $(win.eventdata.subjectUserName)</description>
+    <group>soc_privgrp_remove_win,</group>
+    <mitre>
+      <id>T1098.007</id>
+    </mitre>
+  </rule>
+
+
+  <!-- Nhóm đặc quyền do công ty đặt, tra theo tên nhóm trong soc-privileged-groups -->
+  <rule id="100325" level="12">
+    <if_sid>60141,60144,60151</if_sid>
+    <list field="win.eventdata.targetUserName" lookup="match_key">etc/lists/soc-privileged-groups</list>
+    <list field="win.eventdata.subjectUserName" lookup="not_match_key">etc/lists/soc-account-admins</list>
+    <description>WARNING: Member $(win.eventdata.memberSid) added to custom privileged group $(win.eventdata.targetUserName) by $(win.eventdata.subjectUserName)</description>
+    <group>soc_privgrp_add_win,</group>
+    <mitre>
+      <id>T1098.007</id>
+    </mitre>
+  </rule>
+
+
+  <!-- Thêm rồi gỡ cùng thành viên khỏi cùng nhóm trong 30 phút. Phải nằm SAU mọi rule mang group soc_privgrp_add_win vì if_matched_group chỉ đăng ký các rule đã nạp trước nó -->
+  <rule id="100324" level="13" frequency="2" timeframe="1800">
+    <if_sid>60154,60159,60166,60167,60173,60174,60175,60176</if_sid>
+    <field name="win.system.eventID">^4733$|^4729$|^4757$</field>
+    <list field="win.eventdata.subjectUserName" lookup="not_match_key">etc/lists/soc-allow-account</list>
+    <if_matched_group>soc_privgrp_add_win</if_matched_group>
+    <same_field>win.eventdata.memberSid</same_field>
+    <same_field>win.eventdata.targetSid</same_field>
+    <description>WARNING: Member $(win.eventdata.memberSid) removed from privileged group $(win.eventdata.targetUserName) within 30 minutes of being added (temporary privilege)</description>
+    <group>soc_privgrp_remove_win,</group>
+    <mitre>
+      <id>T1098.007</id>
+    </mitre>
+  </rule>
+
+
+  <!-- Dòng lệnh thêm vào nhóm đặc quyền (Sysmon Event 1 hoặc Security 4688) -->
+  <rule id="100326" level="10">
+    <if_sid>61603,67027</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)\bnet1?(?:\.exe)?"?\s+(?:localgroup|group)\s+"?(?:administrators|domain admins|enterprise admins|schema admins|account operators|server operators|backup operators|print operators)"?\s+.*?/add\b|\bAdd-(?:LocalGroupMember|ADGroupMember|ADPrincipalGroupMembership)\b.{0,200}?\b(?:administrators|domain admins|enterprise admins|schema admins|account operators|server operators|backup operators|print operators)\b</field>
+    <description>NOTICE: Command line adds a member to a privileged Windows group</description>
+    <mitre>
+      <id>T1098.007</id>
+    </mitre>
+  </rule>
+
+
+  <!-- Script block PowerShell (Event 4104) thêm vào nhóm đặc quyền -->
+  <rule id="100327" level="10">
+    <if_sid>91802</if_sid>
+    <field name="win.eventdata.scriptBlockText" type="pcre2">(?is)\bAdd-(?:LocalGroupMember|ADGroupMember|ADPrincipalGroupMembership)\b.{0,300}?\b(?:administrators|domain admins|enterprise admins|schema admins|account operators|server operators|backup operators|print operators)\b|WinNT://[^\s"']{0,100}?(?:administrators|account operators|server operators|backup operators|print operators),group\b</field>
+    <description>NOTICE: PowerShell script block adds a member to a privileged Windows group</description>
+    <mitre>
+      <id>T1098.007</id>
+    </mitre>
+  </rule>
+
+
+</group>
+
+
+<group name="local,soc_privgrp_linux,">
+
+
+  <!-- gpasswd -a user nhóm (decoder gpasswd điền dstuser, srcuser, group) -->
+  <rule id="100328" level="12">
+    <if_sid>2960</if_sid>
+    <field name="group" type="pcre2">^(?:sudo|wheel|admin|root)$</field>
+    <description>WARNING: User $(dstuser) added to privileged group $(group) by $(srcuser) via gpasswd</description>
+    <group>soc_privgrp_add_linux,</group>
+    <mitre>
+      <id>T1098.007</id>
+    </mitre>
+  </rule>
+
+
+  <!-- usermod -aG, gpasswd -M, gpasswd -A: không có decoder, so khớp theo program_name và nội dung -->
+  <rule id="100329" level="12">
+    <program_name>^usermod$|^gpasswd$</program_name>
+    <regex type="pcre2">^(?:add '[^']+' to group '(?:sudo|wheel|admin|root)'|(?:members|administrators) of group (?:sudo|wheel|admin|root) set by \S+ to )</regex>
+    <description>WARNING: usermod or gpasswd changed membership of a privileged Linux group (sudo, wheel, admin, root)</description>
+    <group>soc_privgrp_add_linux,</group>
+    <mitre>
+      <id>T1098.007</id>
+    </mitre>
+  </rule>
+
+
+  <!-- Lệnh quản trị nhóm hoặc sửa sudoers chạy qua sudo, người thực hiện không thuộc soc-account-admins -->
+  <rule id="100330" level="10">
+    <if_sid>5400</if_sid>
+    <field name="command" type="pcre2">(?i)^(?!\S*/(?:cat|less|more|grep|head|tail|ls|stat|diff)\s)(?:\S*/(?:usermod|adduser|useradd)\s.*\b(?:sudo|wheel|admin)\b|\S*/(?:gpasswd|groupmems)(?!.*\s(?:-d|--delete)\b)\s.*\b(?:sudo|wheel|admin)\b|\S*/visudo\b|\S*/sudoedit\b|.*/etc/sudoers)</field>
+    <list field="user" lookup="not_match_key">etc/lists/soc-account-admins</list>
+    <description>NOTICE: sudo used to change group membership or sudoers by $(srcuser): $(command)</description>
+    <group>soc_privgrp_add_linux,</group>
+    <mitre>
+      <id>T1098.007</id>
+      <id>T1548.003</id>
+    </mitre>
+  </rule>
+
+
+  <!-- FIM: /etc/sudoers và /etc/sudoers.d bị sửa hoặc có tệp mới -->
+  <rule id="100331" level="10">
+    <if_sid>550,554</if_sid>
+    <field name="file" type="pcre2">^/etc/sudoers(?:\.d/(?!README$).+)?$</field>
+    <description>NOTICE: sudoers configuration changed or created: $(file)</description>
+    <group>soc_privgrp_sudoers,</group>
+    <mitre>
+      <id>T1548.003</id>
+    </mitre>
+  </rule>
+
+
+  <!-- Nội dung thay đổi có NOPASSWD hoặc cấp ALL (cần report_changes) -->
+  <rule id="100332" level="12">
+    <if_sid>100331</if_sid>
+    <field name="changed_content" type="pcre2">(?i)NOPASSWD|ALL\s*=\s*\(\s*ALL(?::\s*ALL)?\s*\)\s*(?:NOPASSWD:\s*)?ALL</field>
+    <description>WARNING: sudoers change grants unrestricted or passwordless sudo: $(file)</description>
+    <group>soc_privgrp_sudoers,</group>
+    <mitre>
+      <id>T1548.003</id>
+    </mitre>
+  </rule>
+
+
+</group>

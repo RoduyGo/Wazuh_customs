@@ -1,0 +1,232 @@
+<!-- 61603: Sysmon Event 1, tạo tiến trình mới, có dòng lệnh. -->
+<!-- 91802: PowerShell Event 4104, nội dung script block. -->
+<!-- 61615: Sysmon Event 13, ghi giá trị registry. -->
+<!-- 62154 (0600-win-wdefender_rules.xml): Defender Event 5007, cấu hình bị thay đổi (level 5), không phân biệt thêm ngoại lệ. -->
+<!-- 62152, 62157, 62159 (0600-win-wdefender_rules.xml): Defender Event 5001, 5010, 5012, bảo vệ thời gian thực hoặc quét bị tắt. -->
+<!-- 62100, 62101 (0600-win-wdefender_rules.xml): Rule nền level 0 của log Defender, bắt Event 5013 (Tamper Protection chặn thay đổi) nhưng không có rule con. -->
+<!-- 61100 (0590-win-system_rules.xml): Rule cha của nhóm System mức Information, dùng cho Event 7036 (dịch vụ chuyển trạng thái). -->
+<!-- 61102 (0590-win-system_rules.xml): Sự kiện lỗi của kênh System, dùng cho Event 7031, 7034 (dịch vụ chết bất thường). -->
+<!-- 61104 (0590-win-system_rules.xml): Event 7040, kiểu khởi động của dịch vụ bị đổi. -->
+<!-- 40700: Nhóm systemd (level 0), dùng để bắt dịch vụ Linux thoát do kill hoặc crash. -->
+<!-- 5400: Rule nền của log sudo, dùng để đọc lệnh chạy qua sudo. -->
+<group name="local,defender_edr_off,">
+
+
+  <!-- Sysmon Event 1: Set-MpPreference hoặc Add-MpPreference tắt tính năng bảo vệ -->
+  <rule id="100360" level="13">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)\b(Set|Add)-MpPreference\b.*\s-(Disable(RealtimeMonitoring|BehaviorMonitoring|BlockAtFirstSeen|IOAVProtection|ScriptScanning|IntrusionPreventionSystem|ArchiveScanning|EmailScanning|RemovableDriveScanning|ScanningNetworkFiles)|drtm|dips|dioavp|dscrptsc)[\s:=]+["']?(\$true|1|true)\b</field>
+    <description>WARNING: Windows Defender protection disabled through Set-MpPreference or Add-MpPreference command line</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>soc_defender_off_win,</group>
+  </rule>
+
+
+  <!-- PowerShell Event 4104: cùng hành vi trong script block, kể cả phiên tương tác -->
+  <rule id="100361" level="12">
+    <if_sid>91802</if_sid>
+    <field name="win.eventdata.scriptBlockText" type="pcre2">(?is)(\b(Set|Add)-MpPreference\b.{0,200}?\s-(Disable(RealtimeMonitoring|BehaviorMonitoring|BlockAtFirstSeen|IOAVProtection|ScriptScanning|IntrusionPreventionSystem|ArchiveScanning|EmailScanning|RemovableDriveScanning|ScanningNetworkFiles)|drtm|dips|dioavp|dscrptsc)[\s:=]+["']?(\$true|1|true)\b|\bDisable(AntiSpyware|AntiVirus|RealtimeMonitoring|BehaviorMonitoring|OnAccessProtection|IOAVProtection|ScanOnRealtimeEnable|ScriptScanning)["']?.{0,80}?-Value\s+["']?(1|0x0*1)\b)</field>
+    <description>WARNING: Windows Defender protection disabled in a PowerShell script block (Set-MpPreference or registry value)</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>soc_defender_off_win,</group>
+  </rule>
+
+
+  <!-- Sysmon Event 1: thêm ngoại lệ quét -->
+  <rule id="100362" level="10">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)\b(Add|Set)-MpPreference\b.*\s-Exclusion(Path|Process|Extension|IpAddress)\b</field>
+    <description>NOTICE: Windows Defender exclusion added through Set-MpPreference or Add-MpPreference command line</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>soc_defender_excl_win,</group>
+  </rule>
+
+
+  <!-- Con của 100362: ngoại lệ quá rộng -->
+  <rule id="100363" level="12">
+    <if_sid>100362</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)(-ExclusionPath[\s:=]+["']?([A-Z]:\\*|[A-Z]:\\+(Users|Windows|ProgramData)\\*|[^\s,"']*\\+(Temp|Public|AppData)\\*)["']?(\s|,|$)|-ExclusionExtension[\s:=]+["']?\.?(exe|dll|ps1|bat|cmd|vbs|js|scr)\b|-ExclusionProcess[\s:=]+["']?([^\s,"']*\\+)?(powershell|pwsh|cmd|wscript|cscript|rundll32|mshta|regsvr32)(\.exe)?\b)</field>
+    <description>WARNING: Broad Windows Defender exclusion added (drive root, user profile, temp folder, script extension or interpreter process)</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>soc_defender_excl_win,</group>
+  </rule>
+
+
+  <!-- Sysmon Event 1: reg add hoặc Set-ItemProperty đặt giá trị Disable của Defender -->
+  <rule id="100364" level="12">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)(\breg(\.exe)?\s+add\b.*\bWindows Defender\b.*\s/v\s+["']?Disable(AntiSpyware|AntiVirus|RealtimeMonitoring|BehaviorMonitoring|OnAccessProtection|IOAVProtection|ScanOnRealtimeEnable|ScriptScanning)["']?\s.*\s/d\s+["']?(1|0x0*1)\b|\b(Set|New)-ItemProperty\b.*\bWindows Defender\b.*\bDisable(AntiSpyware|AntiVirus|RealtimeMonitoring|BehaviorMonitoring|OnAccessProtection|IOAVProtection|ScanOnRealtimeEnable|ScriptScanning)\b.*-Value\s+["']?(1|0x0*1)\b)</field>
+    <description>WARNING: Windows Defender disable value written to the registry through reg add or PowerShell</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>soc_defender_off_win,</group>
+  </rule>
+
+
+  <!-- Sysmon Event 13: giá trị Disable của Defender được đặt thành DWORD 1 -->
+  <rule id="100365" level="12">
+    <if_sid>61615</if_sid>
+    <field name="win.eventdata.targetObject" type="pcre2">(?i)\\+Windows Defender\\+(Real-Time Protection\\+)?Disable(AntiSpyware|AntiVirus|RealtimeMonitoring|BehaviorMonitoring|OnAccessProtection|IOAVProtection|ScanOnRealtimeEnable|ScriptScanning)$</field>
+    <field name="win.eventdata.details" type="pcre2">^DWORD \(0x0*1\)$</field>
+    <description>WARNING: Sysmon registry event: Windows Defender disable value set at $(win.eventdata.targetObject) by $(win.eventdata.image)</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>soc_defender_off_win,</group>
+  </rule>
+
+
+  <!-- Sysmon Event 13: ghi vào khóa Exclusions -->
+  <rule id="100366" level="10">
+    <if_sid>61615</if_sid>
+    <field name="win.eventdata.targetObject" type="pcre2">(?i)\\+Windows Defender\\+Exclusions\\+(Paths|Extensions|Processes|IpAddresses)\\+</field>
+    <description>NOTICE: Sysmon registry event: Windows Defender exclusion written at $(win.eventdata.targetObject) by $(win.eventdata.image)</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>soc_defender_excl_win,</group>
+  </rule>
+
+
+  <!-- Defender Event 5007: cấu hình đổi, nội dung nhắc khóa Exclusions (định dạng thông điệp chưa kiểm chứng) -->
+  <rule id="100367" level="10">
+    <if_sid>62154</if_sid>
+    <field name="win.system.message" type="pcre2">(?i)Windows Defender\\+Exclusions\\+(Paths|Extensions|Processes|IpAddresses)</field>
+    <description>NOTICE: Windows Defender configuration change adds an exclusion (event 5007)</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>soc_defender_excl_win,</group>
+  </rule>
+
+
+  <!-- Defender 5001, 5010, 5012: bảo vệ tự báo đã tắt -->
+  <rule id="100368" level="11">
+    <if_sid>62152,62157,62159</if_sid>
+    <description>NOTICE: Windows Defender protection turned off, Defender event $(win.system.eventID)</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>soc_defender_off_win,</group>
+  </rule>
+
+
+  <!-- Defender 5013: Tamper Protection chặn một thay đổi -->
+  <rule id="100369" level="12">
+    <if_sid>62100,62101</if_sid>
+    <field name="win.system.eventID">^5013$</field>
+    <description>WARNING: Windows Defender tamper protection blocked a configuration change (event 5013)</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>soc_defender_off_win,</group>
+  </rule>
+
+
+  <!-- Sysmon Event 1: dừng, vô hiệu hóa dịch vụ, driver, tiến trình bảo mật -->
+  <rule id="100370" level="12">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)(\b(net1?|sc)(\.exe)?["']?\s+(stop|pause|delete|failure)\s+["']?(WinDefend|Sense|WdNisSvc|WdFilter|WdBoot|WdNisDrv|SecurityHealthService|wscsvc|MDCoreSvc|Windows Defender Antivirus Service|Microsoft Defender Antivirus Service|Windows Defender Advanced Threat Protection Service|Security Center)\b|\bsc(\.exe)?\s+config\s+["']?(WinDefend|Sense|WdNisSvc|WdFilter|WdBoot|WdNisDrv|SecurityHealthService|wscsvc|MDCoreSvc)["']?\s+start\s*=\s*(disabled|demand)|\bStop-Service\b.*\b(WinDefend|Sense|WdNisSvc|WdFilter|SecurityHealthService|wscsvc|MDCoreSvc)\b|\bSet-Service\b.*\b(WinDefend|Sense|WdNisSvc|WdFilter|SecurityHealthService|wscsvc|MDCoreSvc)\b.*-StartupType\s+(Disabled|Manual)|\bfltmc(\.exe)?\s+unload\s+WdFilter\b|\b(taskkill|Stop-Process)\b.*\b(MsMpEng|MsSense|NisSrv|SenseIR|SecurityHealthService)\b)</field>
+    <description>WARNING: Command line stops or disables a Windows Defender or Security Center service, driver or process</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>soc_defender_off_win,</group>
+  </rule>
+
+
+  <!-- System Event 7036: dịch vụ bảo mật chuyển sang stopped -->
+  <rule id="100371" level="10">
+    <if_sid>61100</if_sid>
+    <field name="win.system.eventID">^7036$</field>
+    <field name="win.eventdata.param2" type="pcre2">(?i)^stopped$</field>
+    <list field="win.eventdata.param1" lookup="match_key">etc/lists/soc-security-services</list>
+    <description>NOTICE: Security service $(win.eventdata.param1) entered the stopped state</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>soc_defender_off_win,</group>
+  </rule>
+
+
+  <!-- System Event 7031, 7034: dịch vụ bảo mật chết bất thường -->
+  <rule id="100372" level="10">
+    <if_sid>61102</if_sid>
+    <field name="win.system.eventID">^703[14]$</field>
+    <list field="win.eventdata.param1" lookup="match_key">etc/lists/soc-security-services</list>
+    <description>NOTICE: Security service $(win.eventdata.param1) terminated unexpectedly</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>soc_defender_off_win,</group>
+  </rule>
+
+
+  <!-- System Event 7040: kiểu khởi động của dịch vụ bảo mật đổi sang disabled -->
+  <rule id="100373" level="11">
+    <if_sid>61104</if_sid>
+    <field name="win.system.message" type="pcre2">(?i)changed from .+ to disabled</field>
+    <list field="win.eventdata.param1" lookup="match_key">etc/lists/soc-security-services</list>
+    <description>NOTICE: Startup type of security service $(win.eventdata.param1) changed to disabled</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>soc_defender_off_win,</group>
+  </rule>
+
+
+  <!-- Sysmon Event 1: gỡ hoặc tắt tính năng Windows Defender -->
+  <rule id="100374" level="12">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)(\b(Uninstall|Remove)-WindowsFeature\b.*\bWindows-Defender(-Features|-GUI)?(?![-\w])|\bDisable-WindowsOptionalFeature\b.*\bWindows-Defender(-Features|-GUI)?(?![-\w])|\bdism(\.exe)?\b.*/(disable-feature|remove-feature)\b.*Windows-Defender(-Features|-GUI)?(?![-\w]))</field>
+    <description>WARNING: Command line removes or disables the Windows Defender feature</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>soc_defender_off_win,</group>
+  </rule>
+
+
+  <!-- Linux: lệnh sudo dừng, vô hiệu hóa hoặc kill dịch vụ bảo mật (tên dịch vụ chưa kiểm chứng trên máy công ty) -->
+  <rule id="100375" level="10">
+    <if_sid>5400</if_sid>
+    <field name="command" type="pcre2">(?i)(\bsystemctl\s+(stop|disable|mask|kill)\b.*\b(falcon-sensor|mdatp|sentinelone|sysmon|auditd|clamav-daemon|osqueryd)\b|\bservice\s+(falcon-sensor|mdatp|sentinelone|sysmon|auditd|clamav-daemon|osqueryd)\s+stop\b|\b(pkill|killall)\b.*\b(falcon|mdatp|sentinel|sysmon|auditd|clamd|osqueryd)|\bauditctl\s+-e\s*0\b)</field>
+    <description>NOTICE: Sudo command stops or disables a security service on Linux: $(command)</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>soc_edr_off_linux,</group>
+  </rule>
+
+
+  <!-- Linux: systemd báo dịch vụ bảo mật thoát do tín hiệu hoặc crash -->
+  <rule id="100376" level="10">
+    <if_sid>40700</if_sid>
+    <regex type="pcre2">(?i)\b(falcon-sensor|mdatp|sentinelone|sysmon|auditd|clamav-daemon|osqueryd)\.service: (Main process exited, code=(killed|dumped)|Failed with result '(signal|core-dump|watchdog)')</regex>
+    <description>NOTICE: Security service on Linux exited by signal or crash according to systemd</description>
+    <mitre>
+      <id>T1562.001</id>
+    </mitre>
+    <group>soc_edr_off_linux,</group>
+  </rule>
+
+
+  <!-- Ngoại lệ: máy được phép không chạy Defender. Đặt cuối khối vì cha phải nạp trước -->
+  <rule id="100379" level="3">
+    <if_sid>100360,100361,100364,100365,100368,100370,100371,100373,100374</if_sid>
+    <list field="hostname" lookup="match_key">etc/lists/soc-defender-expected-off</list>
+    <description>INFO: Defender protection change on a host listed as expected to run another endpoint product</description>
+    <group>soc_defender_expected_off,</group>
+  </rule>
+
+
+</group>

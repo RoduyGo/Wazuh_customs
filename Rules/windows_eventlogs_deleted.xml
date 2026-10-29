@@ -1,0 +1,137 @@
+<!-- 63103 (0610-win-ms_logs_rules.xml): Event 1102, kênh Security bị xóa, level 5. -->
+<!-- 60117 (0580-win-security_rules.xml): Event 1102, kênh Security bị xóa, level 9, nhánh cha khác của cùng sự kiện. -->
+<!-- 63104 (0610-win-ms_logs_rules.xml): Event 104, một kênh log bị xóa (mọi kênh như nhau), level 5. -->
+<!-- 63108 (0610-win-ms_logs_rules.xml): Rule cha của log nhà cung cấp Microsoft-Windows-Eventlog, Event 1100 (dịch vụ ghi log đã tắt) đi qua đây nhưng chưa có rule con riêng. -->
+<!-- 61603: Sysmon Event 1, tạo tiến trình mới, có dòng lệnh. -->
+<!-- 91802: PowerShell Event 4104, nội dung script block. -->
+<!-- 553 (0015-ossec_rules.xml): FIM báo tệp bị xóa (level 7), dùng để bắt tệp .evtx bị xóa. -->
+<group name="local,evtlog_clear,">
+
+
+  <!-- Security Event 1102: gắn vào cả hai nhánh cha có sẵn (63103 và 60117) -->
+  <rule id="100400" level="12">
+    <if_sid>63103,60117</if_sid>
+    <description>WARNING: Windows Security event log cleared (event 1102) by $(win.logFileCleared.subjectUserName)</description>
+    <mitre>
+      <id>T1070.001</id>
+    </mitre>
+    <group>soc_evtlog_clear_win,</group>
+  </rule>
+
+
+  <!-- System Event 104: một kênh nhật ký bị xóa -->
+  <rule id="100401" level="10">
+    <if_sid>63104</if_sid>
+    <description>NOTICE: Windows event log $(win.logFileCleared.channel) cleared (event 104) by $(win.logFileCleared.subjectUserName)</description>
+    <mitre>
+      <id>T1070.001</id>
+    </mitre>
+    <group>soc_evtlog_clear_win,</group>
+  </rule>
+
+
+  <!-- Con của 100401: kênh nhạy cảm bị xóa -->
+  <rule id="100402" level="12">
+    <if_sid>100401</if_sid>
+    <field name="win.logFileCleared.channel" type="pcre2">(?i)^(System|Security|Windows PowerShell|Microsoft-Windows-Sysmon/Operational|Microsoft-Windows-PowerShell/Operational|Microsoft-Windows-Windows Defender/Operational)$</field>
+    <description>WARNING: Security-relevant Windows event log $(win.logFileCleared.channel) cleared (event 104) by $(win.logFileCleared.subjectUserName)</description>
+    <mitre>
+      <id>T1070.001</id>
+    </mitre>
+    <group>soc_evtlog_clear_win,</group>
+  </rule>
+
+
+  <!-- Security Event 1100: ghi nhận để săn tìm, cũng sinh khi tắt máy -->
+  <rule id="100403" level="3">
+    <if_sid>63108</if_sid>
+    <field name="win.system.eventID">^1100$</field>
+    <description>INFO: Windows event logging service shut down (event 1100), also logged at normal shutdown</description>
+    <mitre>
+      <id>T1562.002</id>
+    </mitre>
+    <group>soc_evtlog_svc_win,</group>
+  </rule>
+
+
+  <!-- Sysmon Event 1: lệnh xóa hoặc tắt kênh nhật ký -->
+  <rule id="100404" level="12">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)(\bwevtutil(\.exe)?["']?\s+(/\S+\s+)*(cl|clear-log)\b|\bwevtutil(\.exe)?["']?\s+(sl|set-log)\b.*/(e|enabled):\s*false\b|\b(Clear|Remove)-EventLog\b|\.ClearLog\s*\(|\bwmic\b.*\bNTEventLogFile\b.*\bClearEventLog\b)</field>
+    <description>WARNING: Command line clears or disables a Windows event log</description>
+    <mitre>
+      <id>T1070.001</id>
+      <id>T1562.002</id>
+    </mitre>
+    <group>soc_evtlog_clear_win,</group>
+  </rule>
+
+
+  <!-- PowerShell Event 4104: cùng hành vi trong script block -->
+  <rule id="100405" level="12">
+    <if_sid>91802</if_sid>
+    <field name="win.eventdata.scriptBlockText" type="pcre2">(?is)(\bwevtutil(\.exe)?["']?\s+(/\S+\s+)*(cl|clear-log)\b|\bwevtutil(\.exe)?["']?\s+(sl|set-log)\b.{0,200}?/(e|enabled):\s*false\b|\b(Clear|Remove)-EventLog\b|\.ClearLog\s*\(|\bwmic\b.{0,200}?\bNTEventLogFile\b.{0,200}?\bClearEventLog\b)</field>
+    <description>WARNING: PowerShell script block clears or disables a Windows event log</description>
+    <mitre>
+      <id>T1070.001</id>
+      <id>T1562.002</id>
+    </mitre>
+    <group>soc_evtlog_clear_win,</group>
+  </rule>
+
+
+  <!-- Sysmon Event 1: dừng hoặc vô hiệu hóa dịch vụ Windows Event Log -->
+  <rule id="100406" level="12">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)(\b(net1?|sc)(\.exe)?["']?\s+(stop|pause|delete)\s+["']?(EventLog|Windows Event Log)\b|\bsc(\.exe)?\s+config\s+["']?EventLog["']?\s+start\s*=\s*disabled|\bStop-Service\b.*\b(EventLog|Windows Event Log)\b|\bSet-Service\b.*\bEventLog\b.*-StartupType\s+Disabled)</field>
+    <description>WARNING: Command line stops or disables the Windows Event Log service</description>
+    <mitre>
+      <id>T1562.002</id>
+    </mitre>
+    <group>soc_evtlog_clear_win,</group>
+  </rule>
+
+
+  <!-- Sysmon Event 1: tắt hoặc xóa chính sách audit -->
+  <rule id="100407" level="10">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)(\bauditpol(\.exe)?["']?\s+/(clear|remove)\b|\bauditpol(\.exe)?["']?\s+/set\b(?=.*/(success|failure):\s*disable))</field>
+    <description>NOTICE: Command line clears or disables the Windows audit policy</description>
+    <mitre>
+      <id>T1562.002</id>
+    </mitre>
+    <group>soc_evtlog_clear_win,</group>
+  </rule>
+
+
+  <!-- FIM: tệp .evtx bị xóa (cần cấu hình FIM tùy chọn ở mục b) -->
+  <rule id="100408" level="10">
+    <if_sid>553</if_sid>
+    <field name="file" type="pcre2">(?i)[\\/]+winevt[\\/]+logs[\\/]+[^\\/]+\.evtx$</field>
+    <description>NOTICE: Windows event log file deleted: $(file)</description>
+    <mitre>
+      <id>T1070.004</id>
+    </mitre>
+    <group>soc_evtlog_clear_win,</group>
+  </rule>
+
+
+  <!-- Ngoại lệ: tài khoản được phép. Đặt cuối khối vì cha phải nạp trước -->
+  <rule id="100409" level="5">
+    <if_sid>100400,100401,100402</if_sid>
+    <list field="win.logFileCleared.subjectUserName" lookup="match_key">etc/lists/soc-account-admins</list>
+    <description>INFO: Windows event log cleared by an account listed in soc-account-admins ($(win.logFileCleared.subjectUserName))</description>
+    <group>soc_evtlog_expected_clear,</group>
+  </rule>
+
+
+  <!-- Ngoại lệ: máy dựng ảnh hoặc máy mẫu -->
+  <rule id="100410" level="5">
+    <if_sid>100400,100401,100402</if_sid>
+    <list field="hostname" lookup="match_key">etc/lists/soc-imaging-hosts</list>
+    <description>INFO: Windows event log cleared on a host listed as imaging or template machine</description>
+    <group>soc_evtlog_expected_clear,</group>
+  </rule>
+
+
+</group>

@@ -9,7 +9,7 @@
 <!-- 550 (0015-ossec_rules.xml): FIM báo tệp bị sửa nội dung, dùng cho /etc/passwd, /etc/shadow, /etc/group. -->
 
 <group name="local,account_management,">
-<rule id="100123" level="13"><if_sid>5715</if_sid> ... </rule>
+
   <!-- Windows: rule nền tạo, vô hiệu hóa, xóa tài khoản -->
   <rule id="100300" level="8">
     <if_sid>60109</if_sid>

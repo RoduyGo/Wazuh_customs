@@ -1,0 +1,231 @@
+<!-- 61603: Sysmon Event 1, tạo tiến trình mới (có dòng lệnh, tiến trình cha). -->
+<!-- 67027 (0955-WEF-baseline_rules.xml): Security Event 4688, tạo tiến trình mới (có dòng lệnh khi bật GPO). -->
+<!-- 91802: PowerShell Event 4104, nội dung script block. -->
+<!-- 92213: Sysmon Event 11, tệp thực thi hoặc script được ghi vào thư mục Temp của người dùng. -->
+<!-- 200151 (bộ SOCFortress, không thuộc Wazuh): Sysmon for Linux, mọi tiến trình mới (level 3), không xét nội dung. -->
+<!-- 80700: Rule nền của log auditd (execve), dùng để bắt lệnh nc, ncat có tham số thực thi. -->
+<!-- 5400: Rule nền của log sudo, dùng để đọc lệnh chạy qua sudo. -->
+<group name="local,soc_psh_win,">
+
+
+  <!-- PowerShell do tiến trình cha bất thường (Office, trình duyệt, script host, WMI) kèm cờ che giấu, mã hóa hoặc tải về -->
+  <rule id="100340" level="14">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.parentImage" type="pcre2">(?i)\\{1,2}(?:winword|excel|powerpnt|outlook|msaccess|mspub|onenote|visio|wmiprvse|mshta|wscript|cscript|regsvr32|rundll32|w3wp|sqlservr|chrome|msedge|firefox|iexplore|acrord32|acrobat|foxitreader)\.exe$</field>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)^(?=.*\b(?:powershell|pwsh)(?:\.exe)?\b)(?=.*(?:\s[-/]e(?:c|n[a-z]*)?\s+["']?[A-Za-z0-9+/]{20,}|\s[-/]w(?:i[a-z]*)?\s+(?:h[a-z]*|1)\b|\s[-/](?:ep|ex[a-z]*)\s+(?:bypass|unrestricted)\b|downloadstring|downloadfile|net\.webclient|invoke-webrequest|\biwr\b|invoke-restmethod|\birm\b|start-bitstransfer|\biex\b|invoke-expression))</field>
+    <description>WARNING: PowerShell started by unusual parent $(win.eventdata.parentImage) with encoded, hidden, bypass or download arguments: $(win.eventdata.commandLine)</description>
+    <mitre>
+      <id>T1059.001</id>
+    </mitre>
+  </rule>
+
+
+  <!-- Lệnh mã hóa base64 kèm cửa sổ ẩn (kiểu -w hidden -enc) -->
+  <rule id="100341" level="12">
+    <if_sid>61603,67027</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)^(?=.*\b(?:powershell|pwsh)(?:\.exe)?\b)(?=.*\s[-/]e(?:c|n[a-z]*)?\s+["']?[A-Za-z0-9+/]{20,})(?=.*\s[-/]w(?:i[a-z]*)?\s+(?:h[a-z]*|1)\b)</field>
+    <description>WARNING: PowerShell with hidden window and encoded command: $(win.eventdata.commandLine)</description>
+    <mitre>
+      <id>T1059.001</id>
+      <id>T1027</id>
+    </mitre>
+  </rule>
+
+
+  <!-- Cradle tải rồi chạy trong dòng lệnh (IEX với WebClient, DownloadString, Invoke-WebRequest) -->
+  <rule id="100342" level="12">
+    <if_sid>61603,67027</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?is)^(?=.*\b(?:powershell|pwsh)(?:\.exe)?\b)(?:.*\b(?:iex|invoke-expression)\b.{0,300}?(?:net\.webclient|downloadstring|downloaddata|downloadfile|invoke-webrequest|\biwr\b|invoke-restmethod|\birm\b|start-bitstransfer)|.*(?:net\.webclient|downloadstring|downloaddata|invoke-webrequest|\biwr\b|invoke-restmethod|\birm\b).{0,300}?\b(?:iex|invoke-expression)\b)</field>
+    <description>WARNING: PowerShell download-and-execute pattern in command line: $(win.eventdata.commandLine)</description>
+    <mitre>
+      <id>T1059.001</id>
+      <id>T1105</id>
+    </mitre>
+  </rule>
+
+
+  <!-- powershell.exe do tiến trình cha bất thường, không cần cờ nào -->
+  <rule id="100343" level="12">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.image" type="pcre2">(?i)\\{1,2}(?:powershell|pwsh)\.exe$</field>
+    <field name="win.eventdata.parentImage" type="pcre2">(?i)\\{1,2}(?:winword|excel|powerpnt|outlook|msaccess|mspub|onenote|visio|mshta|wscript|cscript|regsvr32|rundll32|w3wp|sqlservr|chrome|msedge|firefox|iexplore|acrord32|acrobat|foxitreader)\.exe$</field>
+    <description>WARNING: PowerShell started by unusual parent $(win.eventdata.parentImage)</description>
+    <mitre>
+      <id>T1059.001</id>
+    </mitre>
+  </rule>
+
+
+  <!-- Bản sao hoặc bản đổi tên của powershell.exe chạy ngoài thư mục WindowsPowerShell -->
+  <rule id="100344" level="12">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.originalFileName" type="pcre2">(?i)^PowerShell\.EXE$</field>
+    <field name="win.eventdata.image" type="pcre2" negate="yes">(?i)^[a-z]:\\{1,2}Windows\\{1,2}(?:System32|SysWOW64|Sysnative)\\{1,2}WindowsPowerShell\\{1,2}v1\.0\\{1,2}powershell\.exe$</field>
+    <description>WARNING: PowerShell binary running from non-standard path: $(win.eventdata.image)</description>
+    <mitre>
+      <id>T1036.003</id>
+      <id>T1059.001</id>
+    </mitre>
+  </rule>
+
+
+  <!-- Hạ phiên bản: -Version 2 tránh AMSI và Script Block Logging -->
+  <rule id="100345" level="10">
+    <if_sid>61603,67027</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)^(?=.*\b(?:powershell|pwsh)(?:\.exe)?\b)(?=.*\s[-/]v(?:e(?:r(?:s(?:i(?:o(?:n)?)?)?)?)?)?\s+2(?:\.0)?\b)</field>
+    <description>NOTICE: PowerShell started with -Version 2 (no AMSI, no Script Block Logging): $(win.eventdata.commandLine)</description>
+    <mitre>
+      <id>T1059.001</id>
+    </mitre>
+  </rule>
+
+
+  <!-- Lệnh mã hóa base64 đứng một mình: rule nền, level thấp -->
+  <rule id="100346" level="8">
+    <if_sid>61603,67027</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)^(?=.*\b(?:powershell|pwsh)(?:\.exe)?\b)(?=.*\s[-/]e(?:c|n[a-z]*)?\s+["']?[A-Za-z0-9+/]{20,})</field>
+    <description>NOTICE: PowerShell started with encoded command: $(win.eventdata.commandLine)</description>
+    <mitre>
+      <id>T1059.001</id>
+      <id>T1027</id>
+    </mitre>
+  </rule>
+
+
+  <!-- ExecutionPolicy Bypass cùng cửa sổ ẩn, hoặc Bypass với script trong thư mục ghi được: rule nền, level thấp -->
+  <rule id="100347" level="8">
+    <if_sid>61603,67027</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)^(?=.*\b(?:powershell|pwsh)(?:\.exe)?\b)(?=.*\s[-/](?:ep|ex[a-z]*)\s+(?:bypass|unrestricted)\b)(?:(?=.*\s[-/]w(?:i[a-z]*)?\s+(?:h[a-z]*|1)\b)|(?=.*(?:\\{1,2}|/)(?:temp|downloads|public|programdata)(?:\\{1,2}|/)))</field>
+    <description>NOTICE: PowerShell with ExecutionPolicy Bypass and hidden window or writable-path script: $(win.eventdata.commandLine)</description>
+    <mitre>
+      <id>T1059.001</id>
+    </mitre>
+  </rule>
+
+
+  <!-- Script block (Event 4104): dấu hiệu vượt AMSI -->
+  <rule id="100348" level="13">
+    <if_sid>91802</if_sid>
+    <field name="win.eventdata.scriptBlockText" type="pcre2">(?i)amsiutils|amsiinitfailed|amsicontext|amsiscanbuffer|amsi\.dll</field>
+    <description>WARNING: PowerShell script block references AMSI internals (possible AMSI bypass)</description>
+    <mitre>
+      <id>T1562.001</id>
+      <id>T1059.001</id>
+    </mitre>
+  </rule>
+
+
+  <!-- Script block (Event 4104): cradle tải rồi chạy -->
+  <rule id="100349" level="13">
+    <if_sid>91802</if_sid>
+    <field name="win.eventdata.scriptBlockText" type="pcre2">(?is)(?:\b(?:iex|invoke-expression)\b.{0,300}?(?:net\.webclient|downloadstring|downloaddata|downloadfile|invoke-webrequest|\biwr\b|invoke-restmethod|\birm\b|start-bitstransfer)|(?:net\.webclient|downloadstring|downloaddata|invoke-webrequest|\biwr\b|invoke-restmethod|\birm\b).{0,300}?\b(?:iex|invoke-expression)\b)</field>
+    <description>WARNING: PowerShell script block with download-and-execute pattern</description>
+    <mitre>
+      <id>T1059.001</id>
+      <id>T1105</id>
+    </mitre>
+  </rule>
+
+
+  <!-- Script block (Event 4104): giải mã base64 rồi thực thi -->
+  <rule id="100350" level="13">
+    <if_sid>91802</if_sid>
+    <field name="win.eventdata.scriptBlockText" type="pcre2">(?is)(?:frombase64string.{0,400}?(?:\b(?:iex|invoke-expression)\b|\[scriptblock\]::create|assembly\]::load)|\b(?:iex|invoke-expression)\b.{0,200}?frombase64string)</field>
+    <description>WARNING: PowerShell script block decodes base64 and executes the result</description>
+    <mitre>
+      <id>T1140</id>
+      <id>T1059.001</id>
+    </mitre>
+  </rule>
+
+
+  <!-- Hạ nhiễu rule 92213: PowerShell tự tạo tệp __PSScriptPolicyTest_*.ps1 trong thư mục Temp mỗi lần khởi động -->
+  <rule id="100351" level="0">
+    <if_sid>92213</if_sid>
+    <field name="win.eventdata.image" type="pcre2">(?i)\\{1,2}(?:powershell|pwsh)\.exe$</field>
+    <field name="win.eventdata.targetFilename" type="pcre2">(?i)\\{1,2}__PSScriptPolicyTest_[a-z0-9]{8}\.[a-z0-9]{3}\.ps1$</field>
+    <description>INFO: PowerShell execution policy self-test file in Temp (suppresses rule 92213 noise)</description>
+  </rule>
+
+
+  <!-- Danh sách cho phép theo tiến trình cha cho hai rule nền (chờ thông tin: xác nhận công cụ quản trị đang dùng) -->
+  <rule id="100352" level="3">
+    <if_sid>100346,100347</if_sid>
+    <field name="win.eventdata.parentImage" type="pcre2">(?i)\\{1,2}(?:CCM\\{1,2}CcmExec|Microsoft Intune Management Extension\\{1,2}(?:AgentExecutor|Microsoft\.Management\.Services\.IntuneWindowsAgent))\.exe$</field>
+    <description>INFO: PowerShell launched by approved management agent $(win.eventdata.parentImage)</description>
+    <options>no_full_log</options>
+  </rule>
+
+
+  <!-- Danh sách cho phép theo địa chỉ tải về cho hai rule cradle (chờ thông tin: xác nhận nguồn cài đặt hợp lệ) -->
+  <rule id="100353" level="3">
+    <if_sid>100342,100349</if_sid>
+    <regex type="pcre2">(?i)https?://(?:(?:community\.)?chocolatey\.org/|get\.scoop\.sh\b)|\b(?:irm|iwr|invoke-restmethod|invoke-webrequest)\s+(?:-\S+\s+)*get\.scoop\.sh\b</regex>
+    <description>INFO: PowerShell download-and-execute from approved installer source</description>
+    <options>no_full_log</options>
+  </rule>
+
+
+</group>
+
+
+<group name="local,soc_shell_linux,">
+
+
+  <!-- Sysmon for Linux Event 1 (rule SOCFortress 200151): tải rồi đưa thẳng vào shell, hoặc giải mã base64 rồi đưa vào shell -->
+  <rule id="100354" level="12">
+    <if_sid>200151</if_sid>
+    <field name="eventdata.commandLine" type="pcre2">(?i)(?:\b(?:curl|wget|fetch)\b[^|;]*\|\s*(?:sudo\s+(?:-\S+\s+)*)?(?:\S*/)?(?:ba|da|z|k|a)?sh\b|\b(?:ba|da|z|k|a)?sh\s+-c\s+[^|;]{0,20}\$\(\s*(?:curl|wget)\b|(?:\x3C|lt;)\(\s*(?:curl|wget)\b|\bbase64\s+(?:-d|-D|--decode)\b[^;]*\|\s*(?:sudo\s+)?(?:\S*/)?(?:ba|da|z|k|a)?sh\b|(?:\b(?:ba|da|z|k|a)?sh\s+-c|\beval)\s+["']?\$\(\s*(?:echo|printf|cat)\b[^)]*\|\s*base64\s+(?:-d|-D|--decode)\b)</field>
+    <description>WARNING: Download-and-pipe-to-shell or base64-decode-to-shell command line: $(eventdata.commandLine)</description>
+    <mitre>
+      <id>T1059.004</id>
+      <id>T1105</id>
+    </mitre>
+  </rule>
+
+
+  <!-- Sysmon for Linux Event 1: reverse shell qua /dev/tcp, nc hoặc ncat với tham số thực thi, python hoặc perl mở socket rồi gọi shell -->
+  <rule id="100355" level="13">
+    <if_sid>200151</if_sid>
+    <field name="eventdata.commandLine" type="pcre2">(?i)(?:\bexec\s+\d+\S{0,12}/dev/(?:tcp|udp)/|\s-i\s+\S{1,12}\s*/dev/(?:tcp|udp)/|/dev/(?:tcp|udp)/[^\s/]+/\d{1,5}\s+\d\S{1,12}\d\b|\b(?:nc|ncat|netcat|nc\.traditional)\s(?:[^|;]*\s)?(?:-e|-c|--exec|--sh-exec|--lua-exec)\b|\bsocat\b.*\b(?:exec|system):|\b(?:python[0-9.]*|perl|php)\b[^|]*?\s-[cer]\b.*sock.*(?:/bin/(?:ba)?sh|pty\.spawn|subprocess|dup2|\bexec\b|popen|\bsystem\b))</field>
+    <description>WARNING: Reverse shell command line (dev tcp, nc exec option, socket plus shell): $(eventdata.commandLine)</description>
+    <mitre>
+      <id>T1059.004</id>
+    </mitre>
+  </rule>
+
+
+  <!-- auditd EXECVE: nc hoặc ncat được gọi với tham số thực thi (cần quy tắc auditd execve) -->
+  <rule id="100356" level="13">
+    <if_sid>80700</if_sid>
+    <field name="audit.exe" type="pcre2">/(?:nc|ncat|netcat|nc\.traditional)$</field>
+    <regex type="pcre2">\sa\d="(?:-e|-c|--exec|--sh-exec|--lua-exec)"</regex>
+    <description>WARNING: auditd execve of nc or ncat with an execute option (possible reverse shell)</description>
+    <mitre>
+      <id>T1059.004</id>
+    </mitre>
+  </rule>
+
+
+  <!-- Lệnh chạy qua sudo, ghi trong log sudo: nguồn có sẵn khi chưa có Sysmon for Linux hoặc auditd -->
+  <rule id="100357" level="12">
+    <if_sid>5400</if_sid>
+    <field name="command" type="pcre2">(?i)(?:\b(?:curl|wget|fetch)\b[^|;]*\|\s*(?:sudo\s+(?:-\S+\s+)*)?(?:\S*/)?(?:ba|da|z|k|a)?sh\b|\b(?:ba|da|z|k|a)?sh\s+-c\s+[^|;]{0,20}\$\(\s*(?:curl|wget)\b|\bbase64\s+(?:-d|-D|--decode)\b[^;]*\|\s*(?:sudo\s+)?(?:\S*/)?(?:ba|da|z|k|a)?sh\b|\bexec\s+\d+\S{0,12}/dev/(?:tcp|udp)/|\s-i\s+\S{1,12}\s*/dev/(?:tcp|udp)/|/dev/(?:tcp|udp)/[^\s/]+/\d{1,5}\s+\d\S{1,12}\d\b|\b(?:nc|ncat|netcat|nc\.traditional)\s(?:[^|;]*\s)?(?:-e|-c|--exec|--sh-exec|--lua-exec)\b|\b(?:python[0-9.]*|perl|php)\b[^|]*?\s-[cer]\b.*sock.*(?:/bin/(?:ba)?sh|pty\.spawn|subprocess|dup2|\bexec\b|popen|\bsystem\b))</field>
+    <list field="user" lookup="not_match_key">etc/lists/soc-account-admins</list>
+    <description>WARNING: sudo ran a download-to-shell or reverse shell command as $(dstuser) by $(srcuser): $(command)</description>
+    <mitre>
+      <id>T1059.004</id>
+    </mitre>
+  </rule>
+
+
+  <!-- Danh sách cho phép theo địa chỉ tải về cho hai rule tải rồi chạy (chờ thông tin) -->
+  <rule id="100358" level="3">
+    <if_sid>100354,100357</if_sid>
+    <regex type="pcre2">(?i)https?://(?:get\.docker\.com|sh\.rustup\.rs|raw\.githubusercontent\.com/nvm-sh/)</regex>
+    <description>INFO: Download-to-shell from approved installer source</description>
+    <options>no_full_log</options>
+  </rule>
+
+
+</group>
