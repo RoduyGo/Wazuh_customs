@@ -1,5 +1,13 @@
+<!-- 60122 (0580-win-security_rules.xml): Event 4625, đăng nhập Windows thất bại. -->
+<!-- 60104 (0580-win-security_rules.xml): Sự kiện Windows audit failure chung, dùng cho Event 4771, 4768, 4776 trên AD. -->
+<!-- 5710 (0095-sshd_rules.xml): SSH đăng nhập bằng tài khoản không tồn tại. -->
+<!-- 5716, 5760 (0095-sshd_rules.xml): SSH xác thực thất bại (sai mật khẩu). -->
+<!-- 60106 (0580-win-security_rules.xml): Event 4624, đăng nhập Windows thành công. -->
+<!-- 5715 (0095-sshd_rules.xml): SSH đăng nhập thành công (dòng "Accepted"). -->
 <group name="local,brute_force_success,">
-<rule id="100120" level="13" frequency="6" timeframe="600">
+
+  <!-- Phát hiện đăng nhập thành công sau nhiều lần thất bại từ một IP đã sai ít nhất 5 lần trong 10p trên bất kỳ máy nào-->
+  <rule id="100120" level="13" frequency="6" timeframe="600">
     <if_sid>60106</if_sid>
     <if_matched_group>soc_logon_fail_win</if_matched_group>
     <same_field>win.eventdata.ipAddress</same_field>
@@ -17,7 +25,7 @@
     </mitre>
   </rule>
 
-
+  <!-- Phát hiện đăng nhập thành công sau nhiều lần thất bại từ mọi nguồn -->
   <rule id="100121" level="13" frequency="11" timeframe="900">
     <if_sid>60106</if_sid>
     <if_matched_group>soc_logon_fail_win</if_matched_group>
@@ -35,7 +43,7 @@
     </mitre>
   </rule>
 
-
+  <!-- Phát hiện đăng nhập thành công từ một IP từng bị cảnh báo trong 1 Giờ trước -->
   <rule id="100122" level="13" timeframe="3600">
     <if_sid>60106</if_sid>
     <if_matched_group>soc_bf_alert_win</if_matched_group>
@@ -54,7 +62,7 @@
   </rule>
 
 
-  <!-- Linux: đăng nhập SSH thành công sau nhiều lần sai -->
+  <!--Phát hiện login SSH thành công từ một IP sau 5 lần sai liên tục trên bất kì máy linux nào -->
   <rule id="100123" level="13" frequency="6" timeframe="600">
     <if_sid>5715</if_sid>
     <if_matched_group>soc_logon_fail_linux</if_matched_group>
@@ -68,7 +76,7 @@
     </mitre>
   </rule>
 
-
+  <!-- Phát hiện đăng nhập thành công từ một tài khoản sau 10 lần sai liên tục -->
   <rule id="100124" level="13" frequency="11" timeframe="900">
     <if_sid>5715</if_sid>
     <if_matched_group>soc_logon_fail_linux</if_matched_group>
@@ -82,7 +90,7 @@
     </mitre>
   </rule>
 
-
+  <!-- Phát hiện đăng nhập thành công từ một IP từng bị cảnh báo trong 1 Giờ trước -->
   <rule id="100125" level="13" timeframe="3600">
     <if_sid>5715</if_sid>
     <if_matched_group>soc_bf_alert_linux</if_matched_group>
@@ -95,8 +103,4 @@
       <id>T1078</id>
     </mitre>
   </rule>
-
-
-
-
 </group>
