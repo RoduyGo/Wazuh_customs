@@ -1,4 +1,4 @@
-<group name="local,brute_force,">
+<group name="local,brute_force_failure,">
 <!-- 60122 (0580-win-security_rules.xml): Event 4625, đăng nhập Windows thất bại. -->
 <!-- 60104 (0580-win-security_rules.xml): Sự kiện Windows audit failure chung, dùng cho Event 4771, 4768, 4776 trên AD. -->
 <!-- 5710 (0095-sshd_rules.xml): SSH đăng nhập bằng tài khoản không tồn tại. -->

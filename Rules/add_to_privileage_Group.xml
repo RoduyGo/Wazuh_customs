@@ -10,6 +10,7 @@
 <!-- 5400: Rule nền của log sudo, dùng để đọc lệnh chạy qua sudo. -->
 <!-- 550, 554 (0015-ossec_rules.xml): FIM báo tệp bị sửa nội dung (550) hoặc tệp mới (554). -->
 <group name="local,soc_privgrp_win,">
+  
   <!-- Thêm thành viên vào nhóm đặc quyền (4732, 4728), người thêm không thuộc soc-account-admins -->
   <rule id="100320" level="12">
     <if_sid>60154,60159,60173,60174,60175,60176</if_sid>
@@ -74,7 +75,7 @@
 
 
   <!-- Thêm rồi gỡ cùng thành viên khỏi cùng nhóm trong 30 phút. Phải nằm SAU mọi rule mang group soc_privgrp_add_win vì if_matched_group chỉ đăng ký các rule đã nạp trước nó -->
-  <rule id="100324" level="13" frequency="2" timeframe="1800">
+  <rule id="100324" level="13" frequency="2" timeframe="1800">  //2 frequency 
     <if_sid>60154,60159,60166,60167,60173,60174,60175,60176</if_sid>
     <field name="win.system.eventID">^4733$|^4729$|^4757$</field>
     <list field="win.eventdata.subjectUserName" lookup="not_match_key">etc/lists/soc-allow-account</list>
@@ -100,7 +101,7 @@
   </rule>
 
 
-  <!-- Script block PowerShell (Event 4104) thêm vào nhóm đặc quyền -->
+  <!-- Script block PowerShell (Event 4104) thêm vào nhóm đặc quyền --> 
   <rule id="100327" level="10">
     <if_sid>91802</if_sid>
     <field name="win.eventdata.scriptBlockText" type="pcre2">(?is)\bAdd-(?:LocalGroupMember|ADGroupMember|ADPrincipalGroupMembership)\b.{0,300}?\b(?:administrators|domain admins|enterprise admins|schema admins|account operators|server operators|backup operators|print operators)\b|WinNT://[^\s"']{0,100}?(?:administrators|account operators|server operators|backup operators|print operators),group\b</field>
@@ -109,8 +110,6 @@
       <id>T1098.007</id>
     </mitre>
   </rule>
-
-
 </group>
 
 
