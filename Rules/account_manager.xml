@@ -10,7 +10,7 @@
 
 <group name="local,account_management,">
 
-  <!-- Windows: rule nền tạo, vô hiệu hóa, xóa tài khoản -->
+  <!-- Ghi nhận tài khoản Windows được tạo (Event 4720) -->
   <rule id="100300" level="8">
     <if_sid>60109</if_sid>
     <field name="win.system.eventID">^4720$</field>
@@ -23,6 +23,7 @@
   </rule>
 
 
+  <!-- Ghi nhận tài khoản Windows bị vô hiệu hóa hoặc xóa (Event 4725, 4726) -->
   <rule id="100301" level="8">
     <if_sid>60111</if_sid>
     <field name="win.system.eventID">^4725$|^4726$</field>
@@ -34,8 +35,7 @@
     </mitre>
   </rule>
 
-
-  <!-- Windows: các trường hợp nâng level -->
+  <!-- Phát hiện tài khoản ẩn được tạo (tên kết thúc bằng $) -->
   <rule id="100302" level="12">
     <if_sid>100300</if_sid>
     <field name="win.eventdata.targetUserName" type="pcre2">\$$</field>
@@ -48,7 +48,7 @@
     </mitre>
   </rule>
 
-
+  <!-- Phát hiện tài khoản được tạo bởi người không nằm trong soc-account-admins -->
   <rule id="100303" level="10">
     <if_sid>100300</if_sid>
     <list field="win.eventdata.subjectUserName" lookup="not_match_key">etc/lists/soc-account-admins</list>
@@ -59,8 +59,8 @@
       <id>T1136</id>
     </mitre>
   </rule>
-
-
+  
+  <!-- Phát hiện tài khoản bị vô hiệu hóa hoặc xóa bởi người không nằm trong soc-account-admins -->
   <rule id="100304" level="10">
     <if_sid>100301</if_sid>
     <list field="win.eventdata.subjectUserName" lookup="not_match_key">etc/lists/soc-account-admins</list>
@@ -73,6 +73,7 @@
   </rule>
 
 
+  <!-- Phát hiện tài khoản trong soc-privileged-accounts bị vô hiệu hóa hoặc xóa -->
   <rule id="100305" level="12">
     <if_sid>100301</if_sid>
     <list field="win.eventdata.targetUserName" lookup="match_key">etc/lists/soc-privileged-accounts</list>
@@ -85,6 +86,7 @@
   </rule>
 
 
+  <!-- Phát hiện một người tạo, vô hiệu hóa hoặc xóa 5 tài khoản trong 10 phút -->
   <rule id="100306" level="12" frequency="5" timeframe="600">
     <if_matched_group>soc_acct_change_win</if_matched_group>
     <same_field>win.eventdata.subjectUserName</same_field>
@@ -98,6 +100,7 @@
   </rule>
 
 
+  <!-- Phát hiện tài khoản Administrator có sẵn (SID -500) bị bật, đặt lại mật khẩu hoặc đổi tên (Event 4722, 4724, 4781) -->
   <rule id="100307" level="12">
     <if_sid>60103</if_sid>
     <field name="win.system.eventID">^4722$|^4724$|^4781$</field>
@@ -111,6 +114,7 @@
   </rule>
 
 
+  <!-- Phát hiện một người tạo tài khoản rồi thêm thành viên vào Administrators hoặc Domain Admins trong 10 phút (Event 4732, 4728) -->
   <rule id="100308" level="13" timeframe="600">
     <if_sid>60154,60159</if_sid>
     <if_matched_group>soc_acct_created_win</if_matched_group>
@@ -124,8 +128,7 @@
     </mitre>
   </rule>
 
-
-  <!-- Windows: tạo/xóa tài khoản bằng dòng lệnh -->
+  <!-- Phát hiện lệnh tạo hoặc xóa tài khoản (net user, New-LocalUser, New-ADUser, dsadd...) qua Event 4688 -->
   <rule id="100309" level="10">
     <if_sid>60103</if_sid>
     <field name="win.system.eventID">^4688$</field>
@@ -139,6 +142,7 @@
   </rule>
 
 
+  <!-- Phát hiện cùng các lệnh như 100309 qua Sysmon Event 1 -->
   <rule id="100310" level="10">
     <if_group>sysmon_event1</if_group>
     <field name="win.eventdata.commandLine" type="pcre2">(?i)\bnet1?(\.exe)?["']?\s+user\s.*/(add|del)|New-LocalUser|Remove-LocalUser|New-ADUser|Remove-ADUser|\bdsadd(\.exe)?["']?\s+user\b</field>
@@ -152,6 +156,7 @@
 
 
   <!-- Linux -->
+  <!-- Phát hiện tài khoản Linux được tạo với UID 0 (log useradd) -->
   <rule id="100311" level="12">
     <if_sid>5902</if_sid>
     <regex type="pcre2">UID=0,</regex>
@@ -162,6 +167,7 @@
   </rule>
 
 
+  <!-- Phát hiện tài khoản Linux được tạo thẳng vào nhóm sudo, wheel hoặc admin (log useradd) -->
   <rule id="100312" level="12">
     <decoded_as>useradd</decoded_as>
     <regex type="pcre2">^add '\S+' to (shadow )?group '(sudo|wheel|admin)'$</regex>
@@ -173,6 +179,7 @@
   </rule>
 
 
+  <!-- Phát hiện tài khoản Linux có sẵn bị đổi UID thành 0 (log usermod) -->
   <rule id="100313" level="12">
     <program_name>^usermod$</program_name>
     <regex type="pcre2">^change user '\S+' UID from '\d+' to '0'$</regex>
@@ -183,6 +190,7 @@
   </rule>
 
 
+  <!-- Ghi nhận tài khoản Linux bị xóa (log userdel) -->
   <rule id="100314" level="8">
     <if_sid>5903</if_sid>
     <program_name>^userdel$</program_name>
@@ -194,6 +202,7 @@
   </rule>
 
 
+  <!-- Phát hiện 5 tài khoản Linux bị xóa trên cùng một máy trong 10 phút -->
   <rule id="100315" level="12" frequency="5" timeframe="600">
     <if_matched_group>soc_acct_del_linux</if_matched_group>
     <description>WARNING: 5 Linux user accounts deleted on the same host in 10 minutes.</description>
@@ -203,6 +212,7 @@
   </rule>
 
 
+  <!-- Phát hiện /etc/passwd, shadow, group, gshadow bị sửa bởi tiến trình không phải công cụ quản lý tài khoản (FIM whodata) -->
   <rule id="100316" level="12">
     <if_sid>550</if_sid>
     <field name="file" type="pcre2">^/etc/(passwd|shadow|group|gshadow)$</field>
