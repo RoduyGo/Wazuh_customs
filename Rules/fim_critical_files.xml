@@ -1,0 +1,226 @@
+<!-- Hành vi 9: file hệ thống quan trọng bị sửa (FIM). Dải ID 100420 đến 100439. Bản nháp, chưa chạy thử. -->
+<!-- Rule cha có sẵn: 550 (file bị sửa, level 7), 553 (file bị xóa, level 7), 554 (file mới được thêm, level 5). -->
+<!-- Tên trường dùng trong rule là tên của bộ giải mã FIM: file (đường dẫn), process_name (tiến trình, cần whodata), user_name. -->
+<group name="syscheck,soc_fim,">
+
+  <!-- ===================== LINUX ===================== -->
+
+  <!-- Tài khoản và quyền: passwd, shadow, group, gshadow, sudoers, sudoers.d -->
+  <rule id="100420" level="12">
+    <if_sid>550,553,554</if_sid>
+    <field name="file" type="pcre2">^/etc/(?:passwd|shadow|group|gshadow|sudoers|sudoers\.d/[^/]+)$</field>
+    <description>WARNING: Linux account or sudo file changed: $(file)</description>
+    <mitre>
+      <id>T1098</id>
+      <id>T1136.001</id>
+      <id>T1548.003</id>
+    </mitre>
+    <group>soc_fim_linux,soc_fim_account,</group>
+  </rule>
+
+  <!-- Hạ mức khi tiến trình sửa file là công cụ quản lý tài khoản chuẩn (cần whodata để có process_name) -->
+  <rule id="100421" level="3">
+    <if_sid>100420</if_sid>
+    <field name="process_name" type="pcre2">^/(?:usr/)?s?bin/(?:useradd|userdel|usermod|groupadd|groupdel|groupmod|groupmems|gpasswd|chpasswd|chgpasswd|newusers|passwd|chage|chfn|chsh|vipw|vigr|visudo|pwconv|pwunconv|grpconv|grpunconv|pwck|grpck)$</field>
+    <description>INFO: Linux account file changed by a standard account tool: $(file) by $(process_name)</description>
+    <group>soc_fim_linux,soc_fim_account,</group>
+  </rule>
+
+  <!-- Khóa SSH: authorized_keys của bất kỳ người dùng nào -->
+  <rule id="100422" level="13">
+    <if_sid>550,553,554</if_sid>
+    <field name="file" type="pcre2">(?:^|/)\.ssh/authorized_keys2?$</field>
+    <description>WARNING: SSH authorized_keys file changed: $(file)</description>
+    <mitre>
+      <id>T1098.004</id>
+    </mitre>
+    <group>soc_fim_linux,soc_fim_sshkey,</group>
+  </rule>
+
+  <!-- Cấu hình đăng nhập: sshd, PAM, nsswitch, security/*.conf -->
+  <rule id="100423" level="12">
+    <if_sid>550,553,554</if_sid>
+    <field name="file" type="pcre2">^/etc/(?:ssh/(?:sshd_config|sshd_config\.d/[^/]+|sshrc)|pam\.d/[^/]+|pam\.conf|nsswitch\.conf|security/[^/]+\.conf)$</field>
+    <description>WARNING: Linux login configuration (sshd, PAM, nsswitch) changed: $(file)</description>
+    <mitre>
+      <id>T1556.003</id>
+      <id>T1098</id>
+    </mitre>
+    <group>soc_fim_linux,soc_fim_authconf,</group>
+  </rule>
+
+  <!-- Module PAM (.so) bị thay hoặc thêm: cửa hậu lấy mật khẩu -->
+  <rule id="100424" level="13">
+    <if_sid>550,553,554</if_sid>
+    <field name="file" type="pcre2">^/(?:usr/)?lib(?:64|/[^/]+)?/security/[^/]+\.so(?:\.\d+)*$</field>
+    <description>WARNING: PAM module file changed: $(file)</description>
+    <mitre>
+      <id>T1556.003</id>
+    </mitre>
+    <group>soc_fim_linux,soc_fim_pam,</group>
+  </rule>
+
+  <!-- /etc/ld.so.preload: nạp thư viện vào mọi tiến trình (rootkit) -->
+  <rule id="100425" level="14">
+    <if_sid>550,553,554</if_sid>
+    <field name="file" type="pcre2">^/etc/ld\.so\.preload$</field>
+    <description>WARNING: /etc/ld.so.preload changed, a library may be forced into every process: $(file)</description>
+    <mitre>
+      <id>T1574.006</id>
+    </mitre>
+    <group>soc_fim_linux,soc_fim_preload,</group>
+  </rule>
+
+  <!-- ld.so.conf và ld.so.conf.d: đổi thứ tự tìm thư viện -->
+  <rule id="100426" level="10">
+    <if_sid>550,553,554</if_sid>
+    <field name="file" type="pcre2">^/etc/ld\.so\.conf(?:\.d/[^/]+)?$</field>
+    <description>NOTICE: Linux library search path configuration changed: $(file)</description>
+    <mitre>
+      <id>T1574.006</id>
+    </mitre>
+    <group>soc_fim_linux,soc_fim_preload,</group>
+  </rule>
+
+  <!-- Khởi động shell cấp hệ thống: profile, profile.d, bashrc, zsh, environment, rc.local -->
+  <rule id="100427" level="12">
+    <if_sid>550,553,554</if_sid>
+    <field name="file" type="pcre2">^/etc/(?:profile(?:\.d/[^/]+)?|bash\.bashrc|bashrc|zsh/(?:zshenv|zprofile|zshrc|zlogin)|zshenv|environment|rc\.local)$</field>
+    <description>WARNING: Linux system-wide shell startup file changed: $(file)</description>
+    <mitre>
+      <id>T1546.004</id>
+    </mitre>
+    <group>soc_fim_linux,soc_fim_shellrc,</group>
+  </rule>
+
+  <!-- Khởi động shell của từng người dùng: .bashrc, .profile, .zshrc... (level thấp vì người dùng hay tự sửa) -->
+  <rule id="100428" level="8">
+    <if_sid>550,553,554</if_sid>
+    <field name="file" type="pcre2">^/(?:root|home/[^/]+)/\.(?:bashrc|bash_profile|bash_login|bash_logout|profile|zshrc|zprofile|zshenv|zlogin)$</field>
+    <description>NOTICE: Linux user shell startup file changed: $(file)</description>
+    <mitre>
+      <id>T1546.004</id>
+    </mitre>
+    <group>soc_fim_linux,soc_fim_shellrc,</group>
+  </rule>
+
+  <!-- Tên miền và tin cậy mạng: hosts, hosts.allow/deny/equiv, resolv.conf, .rhosts -->
+  <rule id="100429" level="12">
+    <if_sid>550,553,554</if_sid>
+    <field name="file" type="pcre2">^/etc/(?:hosts(?:\.allow|\.deny|\.equiv)?|resolv\.conf)$|^/(?:root|home/[^/]+)/\.rhosts$</field>
+    <description>WARNING: Linux name resolution or network trust file changed: $(file)</description>
+    <mitre>
+      <id>T1565.001</id>
+    </mitre>
+    <group>soc_fim_linux,soc_fim_network,</group>
+  </rule>
+
+  <!-- File chạy hay bị thay bằng bản có cửa hậu (trojan) trong các thư mục bin -->
+  <rule id="100430" level="14">
+    <if_sid>550,554</if_sid>
+    <field name="file" type="pcre2">^/(?:usr/)?s?bin/(?:ls|ps|ss|netstat|top|htop|lsof|find|ifconfig|ip|pstree|w|who|last|lastlog|login|su|sudo|passwd|ssh|sshd|scp|sftp|crontab|cron|bash|sh|dash|killall|pidof|stat|du|df|dir|vdir|md5sum|sha256sum)$</field>
+    <description>WARNING: Commonly trojaned system binary changed or replaced: $(file)</description>
+    <mitre>
+      <id>T1554</id>
+    </mitre>
+    <group>soc_fim_linux,soc_fim_binary,</group>
+  </rule>
+
+  <!-- File mới xuất hiện trực tiếp trong thư mục bin (cấp thấp hơn 100430) -->
+  <rule id="100431" level="10">
+    <if_sid>554</if_sid>
+    <field name="file" type="pcre2">^/(?:usr/)?s?bin/[^/]+$</field>
+    <description>NOTICE: New file added to a system binary directory: $(file)</description>
+    <mitre>
+      <id>T1554</id>
+    </mitre>
+    <group>soc_fim_linux,soc_fim_binary,</group>
+  </rule>
+
+  <!-- Module nhân (.ko) mới hoặc bị sửa -->
+  <rule id="100432" level="13">
+    <if_sid>550,554</if_sid>
+    <field name="file" type="pcre2">^/(?:usr/)?lib/modules/[^/]+/.+\.ko(?:\.(?:xz|zst|gz))?$</field>
+    <description>WARNING: Linux kernel module file added or changed: $(file)</description>
+    <mitre>
+      <id>T1547.006</id>
+    </mitre>
+    <group>soc_fim_linux,soc_fim_kernel,</group>
+  </rule>
+
+  <!-- Khởi động máy: /boot (trừ grubenv, bị ghi mỗi lần khởi động) và cấu hình nạp module -->
+  <rule id="100433" level="12">
+    <if_sid>550,553,554</if_sid>
+    <field name="file" type="pcre2">^/boot/(?:grub2?/(?!grubenv$)[^/]+|efi/.+|initrd[^/]*|initramfs[^/]*|vmlinuz[^/]*)$|^/etc/(?:modules|modules-load\.d/[^/]+|modprobe\.d/[^/]+|default/grub|grub\.d/[^/]+)$</field>
+    <description>WARNING: Linux boot or kernel module loading configuration changed: $(file)</description>
+    <mitre>
+      <id>T1542.003</id>
+      <id>T1547.006</id>
+    </mitre>
+    <group>soc_fim_linux,soc_fim_kernel,</group>
+  </rule>
+
+  <!-- Hạ mức khi dpkg hoặc rpm (trình cài gói) là tiến trình sửa file (cần whodata) -->
+  <rule id="100434" level="3">
+    <if_sid>100423,100424,100426,100427,100430,100431,100432,100433</if_sid>
+    <field name="process_name" type="pcre2">^/(?:usr/)?s?bin/(?:dpkg|rpm)$</field>
+    <description>INFO: Linux system file changed by the package manager: $(file) by $(process_name)</description>
+    <group>soc_fim_linux,soc_fim_package,</group>
+  </rule>
+
+  <!-- ===================== WINDOWS ===================== -->
+
+  <!-- hosts, lmhosts, networks -->
+  <rule id="100435" level="12">
+    <if_sid>550,553,554</if_sid>
+    <field name="file" type="pcre2">(?i)^[a-z]:\\{1,2}windows\\{1,2}system32\\{1,2}drivers\\{1,2}etc\\{1,2}(?:hosts|lmhosts(?:\.sam)?|networks)$</field>
+    <description>WARNING: Windows hosts or network name file changed: $(file)</description>
+    <mitre>
+      <id>T1565.001</id>
+    </mitre>
+    <group>soc_fim_win,soc_fim_network,</group>
+  </rule>
+
+  <!-- Thư mục Startup (chung và của từng người dùng): file mới hoặc bị sửa -->
+  <rule id="100436" level="12">
+    <if_sid>550,554</if_sid>
+    <field name="file" type="pcre2">(?i)\\{1,2}start menu\\{1,2}programs\\{1,2}startup\\{1,2}(?!desktop\.ini$)[^\\]+$</field>
+    <description>WARNING: File added or changed in a Windows Startup folder: $(file)</description>
+    <mitre>
+      <id>T1547.001</id>
+    </mitre>
+    <group>soc_fim_win,soc_fim_startup,</group>
+  </rule>
+
+  <!-- Cửa hậu phím dính: sethc, utilman, osk, narrator... bị thay -->
+  <rule id="100437" level="14">
+    <if_sid>550,554</if_sid>
+    <field name="file" type="pcre2">(?i)\\{1,2}windows\\{1,2}(?:system32|syswow64)\\{1,2}(?:sethc|utilman|osk|narrator|magnify|displayswitch|atbroker)\.exe$</field>
+    <description>WARNING: Windows accessibility program replaced or changed (possible logon-screen backdoor): $(file)</description>
+    <mitre>
+      <id>T1546.008</id>
+    </mitre>
+    <group>soc_fim_win,soc_fim_accessibility,</group>
+  </rule>
+
+  <!-- File .exe, .dll, .sys mới đặt thẳng vào System32, SysWOW64 hoặc drivers -->
+  <rule id="100438" level="10">
+    <if_sid>554</if_sid>
+    <field name="file" type="pcre2">(?i)^[a-z]:\\{1,2}windows\\{1,2}(?:system32|syswow64)\\{1,2}(?:drivers\\{1,2})?[^\\]+\.(?:exe|dll|sys)$</field>
+    <description>NOTICE: New executable, library or driver added to a Windows system folder: $(file)</description>
+    <mitre>
+      <id>T1574.002</id>
+      <id>T1543.003</id>
+    </mitre>
+    <group>soc_fim_win,soc_fim_binary,</group>
+  </rule>
+
+  <!-- Hạ mức khi TrustedInstaller, TiWorker, msiexec hoặc wusa (Windows Update, trình cài) sửa file (cần whodata) -->
+  <rule id="100439" level="3">
+    <if_sid>100437,100438</if_sid>
+    <field name="process_name" type="pcre2">(?i)^[a-z]:\\{1,2}windows\\{1,2}(?:servicing\\{1,2}trustedinstaller|winsxs\\{1,2}[^\\]+\\{1,2}tiworker|system32\\{1,2}(?:msiexec|wusa))\.exe$</field>
+    <description>INFO: Windows system file changed by the servicing stack: $(file) by $(process_name)</description>
+    <group>soc_fim_win,soc_fim_package,</group>
+  </rule>
+
+</group>

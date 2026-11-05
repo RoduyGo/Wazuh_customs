@@ -148,7 +148,7 @@
   </rule>
 
 
-  <!-- Danh sách cho phép theo tiến trình cha cho hai rule nền (chờ thông tin: xác nhận công cụ quản trị đang dùng) -->
+  <!-- Danh sách cho phép theo tiến trình cha cho hai rule nền -->
   <rule id="100352" level="3">
     <if_sid>100346,100347</if_sid>
     <field name="win.eventdata.parentImage" type="pcre2">(?i)\\{1,2}(?:CCM\\{1,2}CcmExec|Microsoft Intune Management Extension\\{1,2}(?:AgentExecutor|Microsoft\.Management\.Services\.IntuneWindowsAgent))\.exe$</field>

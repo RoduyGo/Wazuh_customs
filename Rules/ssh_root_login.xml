@@ -1,0 +1,132 @@
+<!-- Hành vi 12: đăng nhập SSH bằng root. Dải ID 100480 đến 100499. Bản nháp, chưa chạy thử. -->
+<!-- Rule cha có sẵn: 5715 (sshd đăng nhập thành công, level 3), 5716 (sshd xác thực thất bại, level 5), 5718 (tài khoản bị từ chối, level 5). -->
+<!-- Dùng danh sách có sẵn từ hành vi 1: etc/lists/soc-allow-ip (địa chỉ IP, CIDR được phép). -->
+<!-- Quy ước trường: sshd gán tên tài khoản vào dstuser (bí danh user), địa chỉ nguồn vào srcip. -->
+<group name="authentication,ssh,soc_root_ssh,">
+
+  <!-- ===================== ĐĂNG NHẬP THÀNH CÔNG BẰNG ROOT ===================== -->
+
+  <!-- Mọi lần root vào bằng SSH đều đáng ghi nhận -->
+  <rule id="100480" level="10">
+    <if_sid>5715</if_sid>
+    <user>^root$</user>
+    <description>NOTICE: SSH login as root succeeded from $(srcip)</description>
+    <mitre>
+      <id>T1078.003</id>
+      <id>T1021.004</id>
+    </mitre>
+    <group>soc_root_ssh_success,</group>
+  </rule>
+
+  <!-- Root vào bằng mật khẩu (yếu hơn khóa SSH, và là điều rule brute force nhắm tới) -->
+  <rule id="100481" level="13">
+    <if_sid>100480</if_sid>
+    <match>^Accepted password|^Accepted keyboard-interactive</match>
+    <description>WARNING: SSH login as root with a password from $(srcip)</description>
+    <mitre>
+      <id>T1078.003</id>
+      <id>T1110</id>
+    </mitre>
+    <group>soc_root_ssh_success,</group>
+  </rule>
+
+  <!-- Root vào từ địa chỉ ngoài danh sách soc-allow-ip -->
+  <rule id="100482" level="13">
+    <if_sid>100480</if_sid>
+    <list field="srcip" lookup="not_address_match_key">etc/lists/soc-allow-ip</list>
+    <description>WARNING: SSH login as root from an address outside the allow list: $(srcip)</description>
+    <mitre>
+      <id>T1078.003</id>
+      <id>T1021.004</id>
+    </mitre>
+    <group>soc_root_ssh_success,</group>
+  </rule>
+
+  <!-- Root vào ngoài giờ làm việc (giờ của manager, chờ thông tin về giờ làm việc) -->
+  <rule id="100483" level="13">
+    <if_sid>100480</if_sid>
+    <time>7 pm - 6 am</time>
+    <description>WARNING: SSH login as root outside working hours from $(srcip)</description>
+    <mitre>
+      <id>T1078.003</id>
+    </mitre>
+    <group>soc_root_ssh_success,</group>
+  </rule>
+
+  <!-- Root vào vào cuối tuần -->
+  <rule id="100484" level="13">
+    <if_sid>100480</if_sid>
+    <weekday>weekends</weekday>
+    <description>WARNING: SSH login as root at the weekend from $(srcip)</description>
+    <mitre>
+      <id>T1078.003</id>
+    </mitre>
+    <group>soc_root_ssh_success,</group>
+  </rule>
+
+  <!-- Khóa công khai từ địa chỉ trong danh sách được phép: hạ về level 3 -->
+  <rule id="100485" level="3">
+    <if_sid>100480</if_sid>
+    <match>^Accepted publickey</match>
+    <list field="srcip" lookup="address_match_key">etc/lists/soc-allow-ip</list>
+    <description>INFO: SSH login as root with a public key from an allowed address: $(srcip)</description>
+    <group>soc_root_ssh_success,</group>
+  </rule>
+
+  <!-- Lần đầu root vào máy này bằng SSH (dùng bộ nhớ lần đầu của sshd decoder: tài khoản và máy) -->
+  <rule id="100486" level="12">
+    <if_sid>5715</if_sid>
+    <user>^root$</user>
+    <if_fts />
+    <description>WARNING: First SSH login as root on this host, from $(srcip)</description>
+    <mitre>
+      <id>T1078.003</id>
+    </mitre>
+    <group>soc_root_ssh_success,</group>
+  </rule>
+
+  <!-- ===================== ĐĂNG NHẬP THẤT BẠI VỚI ROOT ===================== -->
+  <!-- Không gắn nhóm mới lên các rule 5716, 5760, 5718 có sẵn, vì rule 5720, 5763, 5719 đếm theo chính các rule đó. -->
+  <!-- Các rule đếm dùng nhóm authentication_failed mà 5716 và 5760 đã có, cộng điều kiện tài khoản là root. -->
+
+  <!-- Một IP thử root nhiều lần (ngưỡng thấp hơn rule brute force chung vì root không nên được dùng qua SSH) -->
+  <rule id="100487" level="12" frequency="4" timeframe="300">
+    <if_matched_group>authentication_failed</if_matched_group>
+    <user>^root$</user>
+    <same_source_ip />
+    <same_user />
+    <description>WARNING: Repeated SSH login failures as root from $(srcip)</description>
+    <mitre>
+      <id>T1110.001</id>
+    </mitre>
+    <group>soc_root_ssh_fail,</group>
+  </rule>
+
+  <!-- Nhiều IP khác nhau cùng thử root: dò phân tán -->
+  <rule id="100488" level="12" frequency="6" timeframe="600">
+    <if_matched_group>authentication_failed</if_matched_group>
+    <user>^root$</user>
+    <same_user />
+    <different_srcip />
+    <description>WARNING: SSH login failures as root from many different addresses</description>
+    <mitre>
+      <id>T1110.003</id>
+    </mitre>
+    <group>soc_root_ssh_fail,</group>
+  </rule>
+
+  <!-- Root vào được sau khi chính IP đó thử root nhiều lần -->
+  <rule id="100489" level="14" frequency="3" timeframe="600">
+    <if_sid>100480</if_sid>
+    <if_matched_group>authentication_failed</if_matched_group>
+    <same_source_ip />
+    <same_user />
+    <description>WARNING: SSH login as root succeeded after repeated root failures from $(srcip)</description>
+    <mitre>
+      <id>T1110</id>
+      <id>T1078.003</id>
+    </mitre>
+    <group>soc_root_ssh_success,soc_root_ssh_fail,</group>
+  </rule>
+
+</group>

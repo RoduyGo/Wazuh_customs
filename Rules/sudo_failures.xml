@@ -1,0 +1,141 @@
+<!-- Hành vi 13: nhiều lần sudo thất bại (và su thất bại). Dải ID 100500 đến 100519. Bản nháp, chưa chạy thử. -->
+<!-- Rule cha có sẵn: 5401 (sudo sai mật khẩu, level 5), 5404 (3 lần sai trong một lệnh, level 10), 5405 (không có trong sudoers, level 5), -->
+<!-- 5406 (lệnh không được phép, level 5), 5402 và 5407 (sudo thành công, level 3), 5301 (su sai mật khẩu, level 5), 5302 (su sai lên root, level 9). -->
+<!-- Trường của bộ giải mã sudo: srcuser (người gõ sudo), dstuser (tài khoản đích), tty, pwd, command. -->
+<!-- Dùng danh sách có sẵn: etc/lists/soc-allow-account (tài khoản bỏ qua). -->
+<group name="syslog,sudo,soc_sudo,">
+
+  <!-- ===================== GẮN NHÓM CHO MỌI LẦN SUDO THẤT BẠI ===================== -->
+  <!-- Các rule có sẵn 5401, 5404, 5405, 5406 không có nhóm dùng để đếm, nên gắn nhóm soc_sudo_fail ở đây. -->
+
+  <!-- 1 hoặc 2 lần sai mật khẩu -->
+  <rule id="100500" level="6">
+    <if_sid>5401</if_sid>
+    <list field="srcuser" lookup="not_match_key">etc/lists/soc-allow-account</list>
+    <description>INFO: sudo password failure by $(srcuser) on $(tty)</description>
+    <mitre>
+      <id>T1548.003</id>
+      <id>T1110</id>
+    </mitre>
+    <group>soc_sudo_fail,</group>
+  </rule>
+
+  <!-- 3 lần sai trong một lệnh sudo -->
+  <rule id="100501" level="11">
+    <if_sid>5404</if_sid>
+    <list field="srcuser" lookup="not_match_key">etc/lists/soc-allow-account</list>
+    <description>NOTICE: sudo failed three times in one command by $(srcuser) on $(tty)</description>
+    <mitre>
+      <id>T1548.003</id>
+      <id>T1110</id>
+    </mitre>
+    <group>soc_sudo_fail,</group>
+  </rule>
+
+  <!-- Tài khoản không có trong sudoers cố chạy sudo -->
+  <rule id="100502" level="6">
+    <if_sid>5405</if_sid>
+    <list field="srcuser" lookup="not_match_key">etc/lists/soc-allow-account</list>
+    <description>INFO: $(srcuser) is not in sudoers but tried sudo: $(command)</description>
+    <mitre>
+      <id>T1548.003</id>
+    </mitre>
+    <group>soc_sudo_fail,soc_sudo_nosudoer,</group>
+  </rule>
+
+  <!-- Lệnh không được phép theo sudoers -->
+  <rule id="100503" level="6">
+    <if_sid>5406</if_sid>
+    <list field="srcuser" lookup="not_match_key">etc/lists/soc-allow-account</list>
+    <description>INFO: sudo refused a command for $(srcuser): $(command)</description>
+    <mitre>
+      <id>T1548.003</id>
+    </mitre>
+    <group>soc_sudo_fail,</group>
+  </rule>
+
+  <!-- ===================== ĐẾM VÀ TƯƠNG QUAN ===================== -->
+
+  <!-- Cùng một tài khoản thất bại nhiều lần trong 5 phút -->
+  <rule id="100504" level="11" frequency="4" timeframe="300">
+    <if_matched_group>soc_sudo_fail</if_matched_group>
+    <same_field>srcuser</same_field>
+    <description>NOTICE: Repeated sudo failures by $(srcuser) within 5 minutes</description>
+    <mitre>
+      <id>T1548.003</id>
+      <id>T1110</id>
+    </mitre>
+    <group>soc_sudo_fail,soc_sudo_repeat,</group>
+  </rule>
+
+  <!-- Tài khoản không có quyền sudo cố nhiều lần -->
+  <rule id="100505" level="11" frequency="3" timeframe="300">
+    <if_matched_sid>100502</if_matched_sid>
+    <same_field>srcuser</same_field>
+    <description>NOTICE: $(srcuser) without sudo rights tried sudo repeatedly</description>
+    <mitre>
+      <id>T1548.003</id>
+    </mitre>
+    <group>soc_sudo_fail,soc_sudo_nosudoer,</group>
+  </rule>
+
+  <!-- Tài khoản dịch vụ (web, cơ sở dữ liệu...) gõ sudo, dù chỉ một lần -->
+  <rule id="100506" level="12">
+    <if_sid>5401,5405,5406</if_sid>
+    <field name="srcuser" type="pcre2">^(?:www-data|apache|nginx|httpd|tomcat\d*|nobody|daemon|bin|sys|mysql|mariadb|postgres|redis|mongodb|jenkins|git|ftp)$</field>
+    <list field="srcuser" lookup="not_match_key">etc/lists/soc-allow-account</list>
+    <description>WARNING: Service account $(srcuser) tried to use sudo: $(command)</description>
+    <mitre>
+      <id>T1548.003</id>
+      <id>T1505.003</id>
+    </mitre>
+    <group>soc_sudo_fail,soc_sudo_service,</group>
+  </rule>
+
+  <!-- sudo thành công ngay sau nhiều lần thất bại: mật khẩu có thể đã bị đoán -->
+  <rule id="100507" level="12" frequency="3" timeframe="600">
+    <if_sid>5402,5407</if_sid>
+    <if_matched_group>soc_sudo_fail</if_matched_group>
+    <same_field>srcuser</same_field>
+    <description>WARNING: sudo succeeded for $(srcuser) after repeated failures</description>
+    <mitre>
+      <id>T1548.003</id>
+      <id>T1110</id>
+    </mitre>
+    <group>soc_sudo_success_after_fail,</group>
+  </rule>
+
+  <!-- ===================== SU THẤT BẠI ===================== -->
+
+  <!-- su thất bại (không phải lên root) -->
+  <rule id="100508" level="6">
+    <if_sid>5301</if_sid>
+    <description>INFO: su authentication failed</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>soc_su_fail,</group>
+  </rule>
+
+  <!-- su lên root thất bại -->
+  <rule id="100509" level="10">
+    <if_sid>5302</if_sid>
+    <description>NOTICE: su to root failed</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>soc_su_fail,</group>
+  </rule>
+
+  <!-- Nhiều lần su thất bại trên cùng một máy -->
+  <rule id="100510" level="11" frequency="5" timeframe="300">
+    <if_matched_group>soc_su_fail</if_matched_group>
+    <same_location />
+    <description>NOTICE: Repeated su failures on this host within 5 minutes</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>soc_su_fail,</group>
+  </rule>
+
+</group>

@@ -12,7 +12,7 @@
 <group name="local,defender_edr_off,">
 
 
-  <!-- Sysmon Event 1: Set-MpPreference hoặc Add-MpPreference tắt tính năng bảo vệ -->
+  <!--Một tiến trình gọi lệnh chỉnh Defender(Set-MpPreference) đặt một tham số Disable thành đúng( tắt tính năng bảo vệ windows)-->
   <rule id="100360" level="13">
     <if_sid>61603</if_sid>
     <field name="win.eventdata.commandLine" type="pcre2">(?i)\b(Set|Add)-MpPreference\b.*\s-(Disable(RealtimeMonitoring|BehaviorMonitoring|BlockAtFirstSeen|IOAVProtection|ScriptScanning|IntrusionPreventionSystem|ArchiveScanning|EmailScanning|RemovableDriveScanning|ScanningNetworkFiles)|drtm|dips|dioavp|dscrptsc)[\s:=]+["']?(\$true|1|true)\b</field>
@@ -24,7 +24,7 @@
   </rule>
 
 
-  <!-- PowerShell Event 4104: cùng hành vi trong script block, kể cả phiên tương tác -->
+  <!--Một lệnh PS có tác động đến Defender để tắt 1 lớp bảo vệ bằng Set-MpPreference hoặc bằng cách ghi giá trị Disable... =1 vào registry-->
   <rule id="100361" level="12">
     <if_sid>91802</if_sid>
     <field name="win.eventdata.scriptBlockText" type="pcre2">(?is)(\b(Set|Add)-MpPreference\b.{0,200}?\s-(Disable(RealtimeMonitoring|BehaviorMonitoring|BlockAtFirstSeen|IOAVProtection|ScriptScanning|IntrusionPreventionSystem|ArchiveScanning|EmailScanning|RemovableDriveScanning|ScanningNetworkFiles)|drtm|dips|dioavp|dscrptsc)[\s:=]+["']?(\$true|1|true)\b|\bDisable(AntiSpyware|AntiVirus|RealtimeMonitoring|BehaviorMonitoring|OnAccessProtection|IOAVProtection|ScanOnRealtimeEnable|ScriptScanning)["']?.{0,80}?-Value\s+["']?(1|0x0*1)\b)</field>
@@ -36,7 +36,8 @@
   </rule>
 
 
-  <!-- Sysmon Event 1: thêm ngoại lệ quét -->
+
+  <!--Một tiến trình chỉnh Defender để thêm ngoại lệ quét, ví dụ như thêm một thư mục hoặc file vào danh sách ngoại lệ quét-->
   <rule id="100362" level="10">
     <if_sid>61603</if_sid>
     <field name="win.eventdata.commandLine" type="pcre2">(?i)\b(Add|Set)-MpPreference\b.*\s-Exclusion(Path|Process|Extension|IpAddress)\b</field>
@@ -48,7 +49,7 @@
   </rule>
 
 
-  <!-- Con của 100362: ngoại lệ quá rộng -->
+  <!--Nâng level lên 12 khi ngoại lệ cho Defender quá rộng ví dụ cả ổ đĩa, hay thư mục hệ thống, thư mục tạm-->
   <rule id="100363" level="12">
     <if_sid>100362</if_sid>
     <field name="win.eventdata.commandLine" type="pcre2">(?i)(-ExclusionPath[\s:=]+["']?([A-Z]:\\*|[A-Z]:\\+(Users|Windows|ProgramData)\\*|[^\s,"']*\\+(Temp|Public|AppData)\\*)["']?(\s|,|$)|-ExclusionExtension[\s:=]+["']?\.?(exe|dll|ps1|bat|cmd|vbs|js|scr)\b|-ExclusionProcess[\s:=]+["']?([^\s,"']*\\+)?(powershell|pwsh|cmd|wscript|cscript|rundll32|mshta|regsvr32)(\.exe)?\b)</field>
@@ -60,7 +61,7 @@
   </rule>
 
 
-  <!-- Sysmon Event 1: reg add hoặc Set-ItemProperty đặt giá trị Disable của Defender -->
+  <!--Phát hiện hành vi tắt Defender bằng cách ghi thẳng vào registry qua dòng lệnh là reg add và Set/New-ItemProperty. -->
   <rule id="100364" level="12">
     <if_sid>61603</if_sid>
     <field name="win.eventdata.commandLine" type="pcre2">(?i)(\breg(\.exe)?\s+add\b.*\bWindows Defender\b.*\s/v\s+["']?Disable(AntiSpyware|AntiVirus|RealtimeMonitoring|BehaviorMonitoring|OnAccessProtection|IOAVProtection|ScanOnRealtimeEnable|ScriptScanning)["']?\s.*\s/d\s+["']?(1|0x0*1)\b|\b(Set|New)-ItemProperty\b.*\bWindows Defender\b.*\bDisable(AntiSpyware|AntiVirus|RealtimeMonitoring|BehaviorMonitoring|OnAccessProtection|IOAVProtection|ScanOnRealtimeEnable|ScriptScanning)\b.*-Value\s+["']?(1|0x0*1)\b)</field>
@@ -72,7 +73,8 @@
   </rule>
 
 
-  <!-- Sysmon Event 13: giá trị Disable của Defender được đặt thành DWORD 1 -->
+
+  <!-- Phát hiện khi khi event 13 sysmon nhận giá trị Disable trong khóa của Windows Defender vừa được đặt thành 1-->
   <rule id="100365" level="12">
     <if_sid>61615</if_sid>
     <field name="win.eventdata.targetObject" type="pcre2">(?i)\\+Windows Defender\\+(Real-Time Protection\\+)?Disable(AntiSpyware|AntiVirus|RealtimeMonitoring|BehaviorMonitoring|OnAccessProtection|IOAVProtection|ScanOnRealtimeEnable|ScriptScanning)$</field>

@@ -1,0 +1,235 @@
+<!-- Hành vi 10: service và scheduled task mới (persistence). Dải ID 100440 đến 100459. Bản nháp, chưa chạy thử. -->
+<!-- 100452 và 100454 là con trực tiếp của 61603 (không phải con của 100451, 100453) để đứng trước rule thực thi từ xa của hành vi 11 (level 10). -->
+<!-- Rule cha có sẵn: 60228 (Event 4698, tác vụ theo lịch được tạo, level 4), 60103 (Windows audit success, level 0), -->
+<!-- 61138 (Event 7045, dịch vụ mới, level 5), 61603 (Sysmon Event 1), 91802 (PowerShell script block 4104), 550/553/554 (FIM). -->
+<group name="persistence,soc_persistence,">
+
+  <!-- ===================== WINDOWS: TÁC VỤ THEO LỊCH (Event 4698, 4702) ===================== -->
+
+  <rule id="100440" level="8">
+    <if_sid>60228</if_sid>
+    <description>NOTICE: Windows scheduled task created: $(win.eventdata.taskName)</description>
+    <mitre>
+      <id>T1053.005</id>
+    </mitre>
+    <group>soc_persist_task,</group>
+  </rule>
+
+  <!-- Nội dung tác vụ chạy trình thông dịch, tải từ mạng hoặc chạy file trong thư mục dễ ghi -->
+  <rule id="100441" level="12">
+    <if_sid>100440</if_sid>
+    <field name="win.eventdata.taskContent" type="pcre2">(?is)&lt;Command&gt;(?:[^&lt;]*?[\\/"])?(?:powershell|pwsh|cmd|mshta|wscript|cscript|rundll32|regsvr32|certutil|bitsadmin|msiexec)(?:\.exe)?["\s&lt;]|&lt;Arguments&gt;[^&lt;]*?(?:https?://|\s-e(?:nc\w*)?\s|downloadstring|invoke-expression|\biex\b)|&lt;Command&gt;[^&lt;]*?\\{1,2}(?:temp|appdata|users\\{1,2}public)\\{1,2}</field>
+    <description>WARNING: Scheduled task runs an interpreter, a download or a file in a writable folder: $(win.eventdata.taskName)</description>
+    <mitre>
+      <id>T1053.005</id>
+      <id>T1059</id>
+    </mitre>
+    <group>soc_persist_task,</group>
+  </rule>
+
+  <!-- Tác vụ chạy bằng SYSTEM và chạy trình thông dịch -->
+  <rule id="100442" level="13">
+    <if_sid>100440</if_sid>
+    <field name="win.eventdata.taskContent" type="pcre2">(?is)(?=.*&lt;UserId&gt;(?:S-1-5-18|SYSTEM|NT AUTHORITY\\{1,2}SYSTEM)&lt;/UserId&gt;)(?=.*&lt;Command&gt;(?:[^&lt;]*?[\\/"])?(?:powershell|pwsh|cmd|mshta|wscript|cscript|rundll32|regsvr32|certutil|bitsadmin)(?:\.exe)?["\s&lt;])</field>
+    <description>WARNING: Scheduled task runs as SYSTEM and starts an interpreter: $(win.eventdata.taskName)</description>
+    <mitre>
+      <id>T1053.005</id>
+      <id>T1078</id>
+    </mitre>
+    <group>soc_persist_task,</group>
+  </rule>
+
+  <!-- Event 4702: tác vụ có sẵn bị sửa (đổi hành động để chiếm tác vụ) -->
+  <rule id="100443" level="8">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^4702$</field>
+    <description>NOTICE: Windows scheduled task updated: $(win.eventdata.taskName)</description>
+    <mitre>
+      <id>T1053.005</id>
+    </mitre>
+    <group>soc_persist_task,</group>
+  </rule>
+
+  <rule id="100444" level="12">
+    <if_sid>100443</if_sid>
+    <field name="win.eventdata.taskContentNew" type="pcre2">(?is)&lt;Command&gt;(?:[^&lt;]*?[\\/"])?(?:powershell|pwsh|cmd|mshta|wscript|cscript|rundll32|regsvr32|certutil|bitsadmin|msiexec)(?:\.exe)?["\s&lt;]|&lt;Arguments&gt;[^&lt;]*?(?:https?://|\s-e(?:nc\w*)?\s|downloadstring|invoke-expression|\biex\b)|&lt;Command&gt;[^&lt;]*?\\{1,2}(?:temp|appdata|users\\{1,2}public)\\{1,2}</field>
+    <description>WARNING: Scheduled task updated to run an interpreter, a download or a file in a writable folder: $(win.eventdata.taskName)</description>
+    <mitre>
+      <id>T1053.005</id>
+    </mitre>
+    <group>soc_persist_task,</group>
+  </rule>
+
+  <!-- ===================== WINDOWS: DỊCH VỤ (Event 7045, 4697) ===================== -->
+
+  <rule id="100445" level="8">
+    <if_sid>61138</if_sid>
+    <description>NOTICE: New Windows service installed: $(win.eventdata.serviceName)</description>
+    <mitre>
+      <id>T1543.003</id>
+    </mitre>
+    <group>soc_persist_service,</group>
+  </rule>
+
+  <!-- Đường dẫn dịch vụ là trình thông dịch hoặc công cụ hay bị lạm dụng -->
+  <rule id="100446" level="12">
+    <if_sid>100445</if_sid>
+    <field name="win.eventdata.imagePath" type="pcre2">(?i)(?:^|[\\/"\s])(?:cmd|powershell|pwsh|mshta|wscript|cscript|rundll32|regsvr32|certutil|bitsadmin|msbuild|installutil)(?:\.exe)?(?:["\s]|$)</field>
+    <description>WARNING: New Windows service starts an interpreter or abused binary: $(win.eventdata.serviceName) $(win.eventdata.imagePath)</description>
+    <mitre>
+      <id>T1543.003</id>
+      <id>T1059</id>
+    </mitre>
+    <group>soc_persist_service,</group>
+  </rule>
+
+  <!-- Đường dẫn dịch vụ nằm trong thư mục dễ ghi hoặc trên thư mục chia sẻ mạng -->
+  <rule id="100447" level="12">
+    <if_sid>100445</if_sid>
+    <field name="win.eventdata.imagePath" type="pcre2">(?i)\\{1,2}(?:temp|appdata|users\\{1,2}public|programdata|perflogs|\$recycle\.bin)\\{1,2}|^"?\\{2,4}[^\\]</field>
+    <description>WARNING: New Windows service runs from a writable folder or a network share: $(win.eventdata.serviceName) $(win.eventdata.imagePath)</description>
+    <mitre>
+      <id>T1543.003</id>
+    </mitre>
+    <group>soc_persist_service,</group>
+  </rule>
+
+  <!-- Dịch vụ là driver nhân -->
+  <rule id="100448" level="10">
+    <if_sid>100445</if_sid>
+    <field name="win.eventdata.serviceType" type="pcre2">(?i)kernel|file system</field>
+    <description>NOTICE: New kernel driver service installed: $(win.eventdata.serviceName) $(win.eventdata.imagePath)</description>
+    <mitre>
+      <id>T1543.003</id>
+      <id>T1068</id>
+    </mitre>
+    <group>soc_persist_service,</group>
+  </rule>
+
+  <!-- Driver nhân nằm trong thư mục dễ ghi (mượn driver có lỗ hổng) -->
+  <rule id="100449" level="13">
+    <if_sid>100445</if_sid>
+    <field name="win.eventdata.serviceType" type="pcre2">(?i)kernel|file system</field>
+    <field name="win.eventdata.imagePath" type="pcre2">(?i)\\{1,2}(?:temp|appdata|users\\{1,2}public|programdata|perflogs|\$recycle\.bin)\\{1,2}|^"?\\{2,4}[^\\]</field>
+    <description>WARNING: Kernel driver service installed from a writable folder or share: $(win.eventdata.serviceName) $(win.eventdata.imagePath)</description>
+    <mitre>
+      <id>T1543.003</id>
+      <id>T1068</id>
+    </mitre>
+    <group>soc_persist_service,</group>
+  </rule>
+
+  <!-- Event 4697 (Security): dịch vụ được cài, cùng dấu hiệu như trên -->
+  <rule id="100450" level="12">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^4697$</field>
+    <field name="win.eventdata.serviceFileName" type="pcre2">(?i)(?:^|[\\/"\s])(?:cmd|powershell|pwsh|mshta|wscript|cscript|rundll32|regsvr32|certutil|bitsadmin|msbuild|installutil)(?:\.exe)?(?:["\s]|$)|\\{1,2}(?:temp|appdata|users\\{1,2}public|programdata|perflogs|\$recycle\.bin)\\{1,2}|^"?\\{2,4}[^\\]</field>
+    <description>WARNING: Windows service installed (Security log) with an interpreter or writable path: $(win.eventdata.serviceName) $(win.eventdata.serviceFileName)</description>
+    <mitre>
+      <id>T1543.003</id>
+    </mitre>
+    <group>soc_persist_service,</group>
+  </rule>
+
+  <!-- ===================== WINDOWS: DÒNG LỆNH (Sysmon Event 1) ===================== -->
+
+  <rule id="100451" level="8">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)\bschtasks(?:\.exe)?\b.*\s/create\b</field>
+    <description>NOTICE: Scheduled task created from the command line: $(win.eventdata.commandLine)</description>
+    <mitre>
+      <id>T1053.005</id>
+    </mitre>
+    <group>soc_persist_task,</group>
+  </rule>
+
+  <rule id="100452" level="12">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)\bschtasks(?:\.exe)?\b(?=.*\s/create\b)(?=.*\s/tr\b[^\r\n]*?(?:(?:^|[\\/"'\s])(?:powershell|pwsh|cmd|mshta|wscript|cscript|rundll32|regsvr32|certutil|bitsadmin)(?:\.exe)?\b|https?://|\\{1,2}(?:temp|appdata|users\\{1,2}public|programdata)\\{1,2}))</field>
+    <description>WARNING: Scheduled task created to run an interpreter, a download or a file in a writable folder: $(win.eventdata.commandLine)</description>
+    <mitre>
+      <id>T1053.005</id>
+    </mitre>
+    <group>soc_persist_task,</group>
+  </rule>
+
+  <rule id="100453" level="8">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)\bsc(?:\.exe)?\s+(?:\\{2,4}[\w.\-]+\s+)?create\b</field>
+    <description>NOTICE: Windows service created from the command line: $(win.eventdata.commandLine)</description>
+    <mitre>
+      <id>T1543.003</id>
+    </mitre>
+    <group>soc_persist_service,</group>
+  </rule>
+
+  <rule id="100454" level="12">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)\bsc(?:\.exe)?\s+(?:\\{2,4}[\w.\-]+\s+)?create\b.*\bbinpath\s*=[^\r\n]*?(?:(?:^|[\\/"'\s])(?:cmd|powershell|pwsh|mshta|wscript|cscript|rundll32|regsvr32|certutil|bitsadmin)(?:\.exe)?\b|\\{1,2}(?:temp|appdata|users\\{1,2}public|programdata)\\{1,2})</field>
+    <description>WARNING: Windows service created to run an interpreter or a file in a writable folder: $(win.eventdata.commandLine)</description>
+    <mitre>
+      <id>T1543.003</id>
+    </mitre>
+    <group>soc_persist_service,</group>
+  </rule>
+
+  <!-- ===================== WINDOWS: POWERSHELL (Event 4104) ===================== -->
+
+  <rule id="100455" level="8">
+    <if_sid>91802</if_sid>
+    <field name="win.eventdata.scriptBlockText" type="pcre2">(?is)\b(?:Register-ScheduledTask|New-ScheduledTaskAction|Register-ScheduledJob|New-Service)\b</field>
+    <description>NOTICE: PowerShell script block creates a scheduled task or a service</description>
+    <mitre>
+      <id>T1053.005</id>
+      <id>T1543.003</id>
+    </mitre>
+    <group>soc_persist_task,soc_persist_service,</group>
+  </rule>
+
+  <rule id="100456" level="12">
+    <if_sid>100455</if_sid>
+    <field name="win.eventdata.scriptBlockText" type="pcre2">(?is)\b(?:Register-ScheduledTask|New-ScheduledTaskAction|Register-ScheduledJob|New-Service)\b.{0,400}?(?:-Execute|-Argument|-BinaryPathName)\b[^\r\n]{0,200}?(?:(?:^|[\\/"'\s])(?:powershell|pwsh|cmd|mshta|wscript|cscript|rundll32|regsvr32|certutil|bitsadmin)(?:\.exe)?\b|https?://|\\{1,2}(?:temp|appdata|users\\{1,2}public)\\{1,2})</field>
+    <description>WARNING: PowerShell creates a task or service that runs an interpreter, a download or a file in a writable folder</description>
+    <mitre>
+      <id>T1053.005</id>
+      <id>T1543.003</id>
+    </mitre>
+    <group>soc_persist_task,soc_persist_service,</group>
+  </rule>
+
+  <!-- ===================== LINUX: FIM (cron, at, systemd, init, autostart) ===================== -->
+
+  <rule id="100457" level="12">
+    <if_sid>550,553,554</if_sid>
+    <field name="file" type="pcre2">^/etc/(?:crontab|anacrontab|cron\.(?:d|hourly|daily|weekly|monthly)/[^/]+|systemd/(?:system|user)/.+\.(?:service|timer|socket|path)|init\.d/[^/]+|xdg/autostart/[^/]+\.desktop)$|^/var/spool/(?:cron(?:/crontabs)?/[^/]+|at/[^/]+)$|^/(?:usr/)?lib/systemd/(?:system|user)/[^/]+\.(?:service|timer|socket|path)$|^/(?:root|home/[^/]+)/\.config/(?:systemd/user/[^/]+\.(?:service|timer)|autostart/[^/]+\.desktop)$</field>
+    <description>WARNING: Linux scheduled job or startup unit changed: $(file)</description>
+    <mitre>
+      <id>T1053.003</id>
+      <id>T1053.006</id>
+      <id>T1543.002</id>
+      <id>T1037</id>
+    </mitre>
+    <group>soc_persist_linux,</group>
+  </rule>
+
+  <!-- Nội dung thêm vào có lệnh tải, reverse shell hoặc file trong thư mục tạm (cần report_changes="yes") -->
+  <rule id="100458" level="13">
+    <if_sid>100457</if_sid>
+    <field name="changed_content" type="pcre2">(?i)(?:\b(?:curl|wget|nc|ncat|netcat|socat)\b|bash\s+-i|/dev/(?:tcp|udp)/|base64\s+(?:-d|--decode)|\b(?:python|perl|php|ruby)\S*\s+-[ce]\b|\|\s*(?:ba|da|z)?sh\b|/(?:tmp|dev/shm|var/tmp)/)</field>
+    <description>WARNING: Linux scheduled job or startup unit changed with a download, shell or temp-folder command: $(file)</description>
+    <mitre>
+      <id>T1053.003</id>
+      <id>T1543.002</id>
+    </mitre>
+    <group>soc_persist_linux,</group>
+  </rule>
+
+  <!-- Hạ mức khi dpkg hoặc rpm sửa file (cần whodata) -->
+  <rule id="100459" level="3">
+    <if_sid>100457</if_sid>
+    <field name="process_name" type="pcre2">^/(?:usr/)?s?bin/(?:dpkg|rpm)$</field>
+    <description>INFO: Linux scheduled job or startup unit changed by the package manager: $(file) by $(process_name)</description>
+    <group>soc_persist_linux,soc_fim_package,</group>
+  </rule>
+
+</group>
