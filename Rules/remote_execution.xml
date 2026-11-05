@@ -1,0 +1,231 @@
+<!-- Hành vi 11: thực thi lệnh từ xa (PsExec, WMI, WinRM, DCOM, dịch vụ và tác vụ từ xa). Dải ID 100460 đến 100479. Bản nháp, chưa chạy thử. -->
+<!-- Rule cha có sẵn: 61138 (Event 7045, level 5), 92068 (PsExec chạy lệnh, level 3), 92069 (WMI khởi động tiến trình, level 0), -->
+<!-- 61603 (Sysmon Event 1), 61605 (Sysmon Event 3), 60103 (Windows audit success), 91802 (PowerShell script block). -->
+<group name="lateral_movement,soc_remote_exec,">
+
+  <!-- ===================== DỊCH VỤ ĐƯỢC CÀI TỪ XA (Event 7045) ===================== -->
+
+  <!-- Tên dịch vụ của họ công cụ PsExec: PSEXESVC, PAExec, RemCom, CSExec, winexe -->
+  <rule id="100460" level="12">
+    <if_sid>61138</if_sid>
+    <field name="win.eventdata.serviceName" type="pcre2">(?i)^(?:PSEXESVC|PAExec-\d+-.+|RemCom_?(?:svc)?|csexec|winexesvc)$</field>
+    <description>WARNING: Remote execution service installed (PsExec family): $(win.eventdata.serviceName) $(win.eventdata.imagePath)</description>
+    <mitre>
+      <id>T1569.002</id>
+      <id>T1021.002</id>
+    </mitre>
+    <group>soc_remote_service,</group>
+  </rule>
+
+  <!-- Dịch vụ dạng smbexec: chạy %COMSPEC% hoặc ghi kết quả vào \\127.0.0.1\C$ -->
+  <rule id="100461" level="13">
+    <if_sid>61138</if_sid>
+    <field name="win.eventdata.imagePath" type="pcre2">(?i)%comspec%|\\{2,4}127\.0\.0\.1\\{1,4}[a-z]\$</field>
+    <description>WARNING: Service runs COMSPEC or writes to a local admin share (smbexec style): $(win.eventdata.imagePath)</description>
+    <mitre>
+      <id>T1569.002</id>
+      <id>T1021.002</id>
+    </mitre>
+    <group>soc_remote_service,</group>
+  </rule>
+
+  <!-- Dịch vụ chạy file đặt thẳng ở %SystemRoot% (bản không phân biệt hoa thường của rule 92650) -->
+  <rule id="100462" level="12">
+    <if_sid>61138</if_sid>
+    <field name="win.eventdata.imagePath" type="pcre2">(?i)^"?%systemroot%\\{1,4}[^\\"]+\.exe"?$</field>
+    <description>WARNING: New service runs a binary placed directly in SystemRoot (possible drop via ADMIN$): $(win.eventdata.imagePath)</description>
+    <mitre>
+      <id>T1021.002</id>
+      <id>T1569.002</id>
+    </mitre>
+    <group>soc_remote_service,</group>
+  </rule>
+
+  <!-- ===================== MÁY ĐÍCH: TIẾN TRÌNH ĐƯỢC TẠO TỪ XA (Sysmon Event 1) ===================== -->
+
+  <!-- PsExec chạy lệnh trên máy này (rule 92068 chỉ level 3) -->
+  <rule id="100463" level="10">
+    <if_sid>92068</if_sid>
+    <description>NOTICE: PsExec ran a command on this host: $(win.eventdata.commandLine)</description>
+    <mitre>
+      <id>T1569.002</id>
+    </mitre>
+    <group>soc_remote_exec_target,</group>
+  </rule>
+
+  <!-- WMI khởi động cmd hoặc công cụ chạy lệnh -->
+  <rule id="100464" level="10">
+    <if_sid>92069</if_sid>
+    <field name="win.eventdata.originalFileName" type="pcre2">(?i)^(?:cmd|wscript|cscript|mshta|rundll32|regsvr32|certutil|bitsadmin)\.exe$</field>
+    <description>NOTICE: WMI started a command or script tool: $(win.eventdata.commandLine)</description>
+    <mitre>
+      <id>T1047</id>
+    </mitre>
+    <group>soc_remote_exec_target,</group>
+  </rule>
+
+  <!-- Impacket wmiexec, dcomexec, smbexec: cmd /Q /c ... ghi kết quả vào \\127.0.0.1\ADMIN$ -->
+  <rule id="100465" level="13">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)cmd(?:\.exe)?\s+/q\s+/c\s.*\\{2,4}127\.0\.0\.1\\{1,4}(?:admin|c)\$\\{1,4}</field>
+    <description>WARNING: Command redirects output to a local admin share (Impacket wmiexec or dcomexec style): $(win.eventdata.commandLine)</description>
+    <mitre>
+      <id>T1047</id>
+      <id>T1021.003</id>
+      <id>T1021.002</id>
+    </mitre>
+    <group>soc_remote_exec_target,</group>
+  </rule>
+
+  <!-- Dấu hiệu atexec của Impacket: cmd /C ... > %windir%\Temp\xxxx.tmp 2>&1 (chờ đội pentest xác nhận) -->
+  <rule id="100466" level="13">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)cmd(?:\.exe)?\s+/c\s.*&gt;\s*(?:%windir%|[a-z]:\\{1,4}windows)\\{1,4}temp\\{1,4}[a-z0-9]{6,12}\.tmp\s+2&gt;&amp;1</field>
+    <description>WARNING: Command redirects output to a random file in Windows Temp (Impacket atexec style): $(win.eventdata.commandLine)</description>
+    <mitre>
+      <id>T1053.005</id>
+    </mitre>
+    <group>soc_remote_exec_target,</group>
+  </rule>
+
+  <!-- WinRM: shell ở máy đích (tiến trình cha wsmprovhost.exe) -->
+  <rule id="100467" level="10">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.parentImage" type="pcre2">(?i)\\{1,2}wsmprovhost\.exe$</field>
+    <field name="win.eventdata.originalFileName" type="pcre2">(?i)^(?:cmd|powershell|pwsh|mshta|wscript|cscript|rundll32|regsvr32|certutil|bitsadmin)\.exe$</field>
+    <description>NOTICE: WinRM remote session started a command or script tool: $(win.eventdata.commandLine)</description>
+    <mitre>
+      <id>T1021.006</id>
+    </mitre>
+    <group>soc_remote_exec_target,</group>
+  </rule>
+
+  <!-- DCOM MMC20.Application: mmc.exe sinh ra shell -->
+  <rule id="100468" level="12">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.parentImage" type="pcre2">(?i)\\{1,2}mmc\.exe$</field>
+    <field name="win.eventdata.originalFileName" type="pcre2">(?i)^(?:cmd|powershell|pwsh|mshta|wscript|cscript|rundll32|regsvr32)\.exe$</field>
+    <description>WARNING: mmc.exe started a command or script tool (possible DCOM lateral movement): $(win.eventdata.commandLine)</description>
+    <mitre>
+      <id>T1021.003</id>
+    </mitre>
+    <group>soc_remote_exec_target,</group>
+  </rule>
+
+  <!-- Hạ mức khi lệnh chính xác nằm trong danh sách lệnh quản trị hợp lệ (chờ thông tin về danh sách) -->
+  <rule id="100469" level="3">
+    <if_sid>100463,100464,100467,100468</if_sid>
+    <list field="win.eventdata.commandLine" lookup="match_key">etc/lists/soc-remote-exec-allow</list>
+    <description>INFO: Remote execution matches the approved command list: $(win.eventdata.commandLine)</description>
+    <group>soc_remote_exec_target,</group>
+  </rule>
+
+  <!-- ===================== MÁY NGUỒN: LỆNH ĐƯỢC GÕ (Sysmon Event 1) ===================== -->
+
+  <!-- PsExec hoặc PAExec nhắm tới máy khác -->
+  <rule id="100470" level="10">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)(?:^|[\\/"\s])(?:ps|pa)exec(?:64)?(?:\.exe)?"?\s+(?:.*\s)?\\{2,4}[\w.\-,]+(?:\s|$)</field>
+    <description>NOTICE: PsExec or PAExec targets another host: $(win.eventdata.commandLine)</description>
+    <mitre>
+      <id>T1021.002</id>
+      <id>T1569.002</id>
+    </mitre>
+    <group>soc_remote_exec_source,</group>
+  </rule>
+
+  <!-- PsExec bị đổi tên: nhận qua mô tả file "Execute processes remotely" -->
+  <rule id="100471" level="10">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.description" type="pcre2">(?i)^Execute processes remotely$</field>
+    <description>NOTICE: PsExec binary started (matched by file description, renaming does not hide it): $(win.eventdata.commandLine)</description>
+    <mitre>
+      <id>T1569.002</id>
+    </mitre>
+    <group>soc_remote_exec_source,</group>
+  </rule>
+
+  <!-- wmic với /node: chạy lệnh trên máy khác -->
+  <rule id="100472" level="10">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)\bwmic(?:\.exe)?\b.*[/-]node\s*:</field>
+    <description>NOTICE: WMIC targets another host: $(win.eventdata.commandLine)</description>
+    <mitre>
+      <id>T1047</id>
+    </mitre>
+    <group>soc_remote_exec_source,</group>
+  </rule>
+
+  <rule id="100473" level="12">
+    <if_sid>100472</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)\bprocess\s+call\s+create\b</field>
+    <description>WARNING: WMIC creates a process on another host: $(win.eventdata.commandLine)</description>
+    <mitre>
+      <id>T1047</id>
+    </mitre>
+    <group>soc_remote_exec_source,</group>
+  </rule>
+
+  <!-- sc.exe \\máy create, start, config -->
+  <rule id="100474" level="10">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)\bsc(?:\.exe)?\s+\\{2,4}[\w.\-]+\s+(?:create|start|config|stop|delete)\b</field>
+    <description>NOTICE: sc.exe controls a service on another host: $(win.eventdata.commandLine)</description>
+    <mitre>
+      <id>T1569.002</id>
+      <id>T1021.002</id>
+    </mitre>
+    <group>soc_remote_exec_source,</group>
+  </rule>
+
+  <!-- schtasks /s máy khác -->
+  <rule id="100475" level="10">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)\bschtasks(?:\.exe)?\b(?=.*\s/(?:create|run|change|delete)\b)(?=.*\s/s\s+\S)</field>
+    <description>NOTICE: schtasks manages a task on another host: $(win.eventdata.commandLine)</description>
+    <mitre>
+      <id>T1053.005</id>
+    </mitre>
+    <group>soc_remote_exec_source,</group>
+  </rule>
+
+  <!-- PowerShell (Event 4104): tạo tiến trình từ xa bằng WMI hoặc CIM -->
+  <rule id="100476" level="10">
+    <if_sid>91802</if_sid>
+    <field name="win.eventdata.scriptBlockText" type="pcre2">(?is)\b(?:Invoke-WmiMethod|Invoke-CimMethod)\b(?=.{0,500}Win32_Process)(?=.{0,500}\bCreate\b)(?=.{0,500}-(?:ComputerName|CimSession)\b)</field>
+    <description>NOTICE: PowerShell creates a process on another host through WMI or CIM</description>
+    <mitre>
+      <id>T1047</id>
+    </mitre>
+    <group>soc_remote_exec_source,</group>
+  </rule>
+
+  <!-- ===================== MẠNG VÀ CHIA SẺ ===================== -->
+
+  <!-- Event 5145: ghi file thực thi vào chia sẻ quản trị ADMIN$ hoặc C$ (cần bật Audit Detailed File Share) -->
+  <rule id="100477" level="10">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^5145$</field>
+    <field name="win.eventdata.shareName" type="pcre2">(?i)\\{1,4}\*\\{1,4}(?:admin|c)\$$</field>
+    <field name="win.eventdata.relativeTargetName" type="pcre2">(?i)\.(?:exe|dll|bat|cmd|ps1|vbs)$</field>
+    <description>NOTICE: Executable file written to an admin share: $(win.eventdata.shareName) $(win.eventdata.relativeTargetName)</description>
+    <mitre>
+      <id>T1021.002</id>
+    </mitre>
+    <group>soc_remote_exec_target,</group>
+  </rule>
+
+  <!-- Sysmon Event 3: công cụ dòng lệnh kết nối tới cổng RPC, SMB hoặc WinRM -->
+  <rule id="100478" level="10">
+    <if_sid>61605</if_sid>
+    <field name="win.eventdata.image" type="pcre2">(?i)\\{1,2}(?:powershell|pwsh|cmd|wmic|psexec|psexec64|paexec|mshta)\.exe$</field>
+    <field name="win.eventdata.destinationPort" type="pcre2">^(?:135|445|5985|5986)$</field>
+    <description>NOTICE: Command-line tool connects to an RPC, SMB or WinRM port: $(win.eventdata.image) to $(win.eventdata.destinationIp):$(win.eventdata.destinationPort)</description>
+    <mitre>
+      <id>T1021.002</id>
+      <id>T1021.006</id>
+    </mitre>
+    <group>soc_remote_exec_source,</group>
+  </rule>
+
+</group>
