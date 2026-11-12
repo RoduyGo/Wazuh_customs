@@ -1,0 +1,202 @@
+<!-- 31100 (0245-web_rules.xml): Rule nền gom nhóm sự kiện web access log (level 0). -->
+<!-- 31101 (0245-web_rules.xml): Web server trả về mã lỗi 4xx (level 5). -->
+<!-- 31103, 31104, 31105 (0245-web_rules.xml): Truy vấn có dấu hiệu SQLi, Common web attack, XSS (level 6-7). -->
+<!-- 31106 (0245-web_rules.xml): Tấn công web (31103, 31104, 31105) trả về mã HTTP 200 (level 6). -->
+<!-- 31108 (0245-web_rules.xml): Truy vấn HTTP đơn giản trả về mã 2xx hoặc 3xx (level 0). -->
+<!-- 31166, 31168 (0245-web_rules.xml): Phát hiện khai thác lỗ hổng Shellshock (level 6 và 15). -->
+<!-- 550 (0015-ossec_rules.xml): FIM báo tệp bị sửa đổi nội dung (level 7). -->
+<!-- 554 (0015-ossec_rules.xml): FIM báo tệp mới được tạo trên hệ thống (level 5). -->
+<!-- 60103 (0580-win-security_rules.xml): Rule nền của log Security Windows (level 0), dùng cho Event 4688. -->
+<!-- 61603 (0595-win-sysmon_rules.xml): Sysmon Event 1, tạo tiến trình mới trên Windows (level 0, nhóm sysmon_event1). -->
+<!-- 61613 (0595-win-sysmon_rules.xml): Sysmon Event 11, tạo hoặc ghi đè tệp trên Windows (level 0, nhóm sysmon_event_11). -->
+<!-- 80700 (0365-auditd_rules.xml): Rule nền của Linux Auditd (level 0), dùng cho syscall execve của tiến trình web. -->
+
+<group name="local,webshell_command_exec,">
+
+  <!-- Rule nền: Ghi nhận yêu cầu HTTP POST thành công (mã 200) tới tệp kịch bản động để đếm tần suất điều khiển web shell mã hóa -->
+  <rule id="100400" level="3">
+    <if_sid>31100,31108</if_sid>
+    <id>^200$</id>
+    <regex type="pcre2">"POST\s+\S+\.(php\d?|phtml|phar|asp|aspx|ashx|asmx|jsp|jspx|cfm|py|pl|cgi)\b</regex>
+    <description>INFO: HTTP POST request returned 200 to dynamic script on $(srcip).</description>
+    <group>soc_web_post_script,</group>
+  </rule>
+
+  <!-- Phát hiện tệp kịch bản web mới được tạo trong thư mục web root (FIM Event added - rule 554) -->
+  <rule id="100401" level="12">
+    <if_sid>554</if_sid>
+    <field name="file" type="pcre2">(?i)^(/var/www/|/usr/share/nginx/|/srv/www/|/opt/tomcat/|c:\\inetpub\\wwwroot\\|c:\\xampp\\htdocs\\).*\.(php\d?|phtml|phar|inc|asp|aspx|ashx|asmx|cer|cdx|jsp|jspx|war|cfm|py|pl|cgi|sh)$</field>
+    <list field="process_name" lookup="not_match_key">etc/lists/soc-web-deploy-processes</list>
+    <description>WARNING: New web script file $(file) created in web directory.</description>
+    <group>soc_webshell_file,</group>
+    <mitre>
+      <id>T1505.003</id>
+      <id>T1105</id>
+    </mitre>
+  </rule>
+
+  <!-- Phát hiện tệp kịch bản web hiện có trong thư mục web root bị sửa đổi nội dung (FIM Event modified - rule 550) -->
+  <rule id="100402" level="12">
+    <if_sid>550</if_sid>
+    <field name="file" type="pcre2">(?i)^(/var/www/|/usr/share/nginx/|/srv/www/|/opt/tomcat/|c:\\inetpub\\wwwroot\\|c:\\xampp\\htdocs\\).*\.(php\d?|phtml|phar|inc|asp|aspx|ashx|asmx|cer|cdx|jsp|jspx|war|cfm|py|pl|cgi|sh)$</field>
+    <list field="process_name" lookup="not_match_key">etc/lists/soc-web-deploy-processes</list>
+    <description>WARNING: Existing web script file $(file) modified in web directory.</description>
+    <group>soc_webshell_file,</group>
+    <mitre>
+      <id>T1505.003</id>
+    </mitre>
+  </rule>
+
+  <!-- Phát hiện nội dung tệp kịch bản web vừa tạo/sửa chứa hàm thực thi lệnh hoặc giải mã đặc trưng của web shell (cần report_changes="yes") -->
+  <rule id="100403" level="15">
+    <if_sid>100401,100402</if_sid>
+    <field name="changed_content" type="pcre2">(?i)\b(eval|assert|passthru|shell_exec|system|proc_open|pcntl_exec|popen|base64_decode|gzinflate|gzuncompress|str_rot13)\s*\(|WScript\.Shell|ProcessStartInfo|Runtime\.getRuntime\(\)\.exec|ProcessBuilder|FromBase64String|AES\.Create</field>
+    <description>CRITICAL: Web script $(file) contains web shell execution or obfuscation signatures in modified content.</description>
+    <group>soc_webshell_file,</group>
+    <mitre>
+      <id>T1505.003</id>
+      <id>T1027</id>
+    </mitre>
+  </rule>
+
+  <!-- Phát hiện truy vấn HTTP trả về mã 2xx/3xx gọi tên web shell đã biết hoặc truyền tham số thực thi lệnh hệ thống qua URI -->
+  <rule id="100404" level="13">
+    <if_sid>31100,31106,31108</if_sid>
+    <id>^200$|^302$</id>
+    <url type="pcre2">(?i)/(c99|r57|b374k|wso|alfa|chopper|godzilla|behinder|antsword|weevely|cmd|shell|backdoor|up)\.(php\d?|phtml|asp|aspx|jsp|jspx)\b|[?&amp;](cmd|exec|command|shell|c|run)=(whoami|id|uname|ipconfig|ifconfig|net(%20|\+)user|cat(%20|\+)/etc/passwd|powershell|cmd\.exe|/bin/sh|/bin/bash|wget|curl|nc(%20|\+)-e|certutil)</url>
+    <list field="srcip" lookup="not_address_match_key">etc/lists/soc-allow-ip</list>
+    <description>WARNING: Probable web shell access or command execution via HTTP URI $(url) from $(srcip) (status $(id)).</description>
+    <group>soc_webshell_http,</group>
+    <mitre>
+      <id>T1505.003</id>
+      <id>T1190</id>
+    </mitre>
+  </rule>
+
+  <!-- Phát hiện một IP gửi liên tiếp 15 yêu cầu HTTP POST thành công tới tệp kịch bản động trong 120 giây (dấu hiệu phiên điều khiển web shell mã hóa như Behinder/Godzilla) -->
+  <rule id="100405" level="12" frequency="15" timeframe="120">
+    <if_matched_group>soc_web_post_script</if_matched_group>
+    <same_source_ip />
+    <same_field>url</same_field>
+    <list field="srcip" lookup="not_address_match_key">etc/lists/soc-allow-ip</list>
+    <list field="url" lookup="not_match_key">etc/lists/soc-allow-post-urls</list>
+    <description>WARNING: High-frequency HTTP POST requests (15 in 120s) to script $(url) from $(srcip) (possible encrypted web shell session).</description>
+    <group>soc_webshell_http,</group>
+    <mitre>
+      <id>T1505.003</id>
+      <id>T1071.001</id>
+    </mitre>
+  </rule>
+
+  <!-- Windows: Phát hiện tiến trình dịch vụ web (w3wp.exe, httpd.exe, nginx.exe, php-cgi.exe, tomcat/java) sinh trình thông dịch lệnh hoặc công cụ hệ thống qua Event 4688 -->
+  <rule id="100406" level="12">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^4688$</field>
+    <field name="win.eventdata.parentProcessName" type="pcre2">(?i)\\(w3wp|httpd|nginx|php-cgi|php|tomcat\d*|java|node|caddy)\.exe$</field>
+    <field name="win.eventdata.newProcessName" type="pcre2">(?i)\\(cmd|powershell|pwsh|wscript|cscript|sh|bash|whoami|ipconfig|systeminfo|net|net1|nltest|quser|qwinsta|tasklist|arp|route|nslookup|curl|wget|certutil|bitsadmin|rundll32|regsvr32|mshta|wmic|sc|reg)\.exe$</field>
+    <description>WARNING: Windows web server process $(win.eventdata.parentProcessName) spawned shell or recon utility $(win.eventdata.newProcessName) (event 4688).</description>
+    <options>no_full_log</options>
+    <group>soc_webshell_exec_win,</group>
+    <mitre>
+      <id>T1505.003</id>
+      <id>T1059.003</id>
+      <id>T1059.001</id>
+    </mitre>
+  </rule>
+
+  <!-- Windows: Phát hiện tiến trình dịch vụ web sinh trình thông dịch lệnh hoặc công cụ hệ thống qua Sysmon Event 1 -->
+  <rule id="100407" level="12">
+    <if_sid>61603</if_sid>
+    <field name="win.eventdata.parentImage" type="pcre2">(?i)\\(w3wp|httpd|nginx|php-cgi|php|tomcat\d*|java|node|caddy)\.exe$</field>
+    <field name="win.eventdata.image" type="pcre2">(?i)\\(cmd|powershell|pwsh|wscript|cscript|sh|bash|whoami|ipconfig|systeminfo|net|net1|nltest|quser|qwinsta|tasklist|arp|route|nslookup|curl|wget|certutil|bitsadmin|rundll32|regsvr32|mshta|wmic|sc|reg)\.exe$</field>
+    <description>WARNING: Windows web server process $(win.eventdata.parentImage) spawned $(win.eventdata.image) with command: $(win.eventdata.commandLine) (Sysmon event 1).</description>
+    <options>no_full_log</options>
+    <group>soc_webshell_exec_win,</group>
+    <mitre>
+      <id>T1505.003</id>
+      <id>T1059.003</id>
+      <id>T1059.001</id>
+    </mitre>
+  </rule>
+
+  <!-- Windows: Nâng lên level 14 khi tiến trình con của dịch vụ web chạy lệnh mã hóa Base64, tải payload, tạo tài khoản hoặc trích xuất mật khẩu -->
+  <rule id="100408" level="14">
+    <if_sid>100406,100407</if_sid>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)(-e\b|-enc\b|-encodedcommand|frombase64string|downloadstring|downloadfile|invoke-webrequest|invoke-restmethod|iwr\b|iex\b|invoke-expression|certutil.*-urlcache|bitsadmin.*/transfer|net1?(\.exe)?\s+(user|localgroup).*/add|reg(\.exe)?\s+save\s+hklm\\(sam|system|security)|sekurlsa|lsadump|procdump|comsvcs\.dll.*minidump|vssadmin.*delete\s+shadows)</field>
+    <description>CRITICAL: Web server process executed high-risk post-exploitation or encoded command: $(win.eventdata.commandLine).</description>
+    <options>no_full_log</options>
+    <group>soc_webshell_exec_win,</group>
+    <mitre>
+      <id>T1505.003</id>
+      <id>T1059.001</id>
+      <id>T1105</id>
+    </mitre>
+  </rule>
+
+  <!-- Windows: Phát hiện tiến trình dịch vụ web trực tiếp tạo tệp kịch bản hoặc tệp thực thi trên đĩa qua Sysmon Event 11 -->
+  <rule id="100409" level="14">
+    <if_sid>61613</if_sid>
+    <field name="win.eventdata.image" type="pcre2">(?i)\\(w3wp|httpd|nginx|php-cgi|php|tomcat\d*|java)\.exe$</field>
+    <field name="win.eventdata.targetFilename" type="pcre2">(?i)\.(php\d?|phtml|asp|aspx|ashx|asmx|cer|jsp|jspx|war|exe|dll|bat|cmd|ps1|vbs|hta)$</field>
+    <description>WARNING: Web server process $(win.eventdata.image) dropped script or executable file $(win.eventdata.targetFilename) (Sysmon event 11).</description>
+    <options>no_full_log</options>
+    <group>soc_webshell_file,</group>
+    <mitre>
+      <id>T1505.003</id>
+      <id>T1190</id>
+      <id>T1105</id>
+    </mitre>
+  </rule>
+
+  <!-- Linux: Phát hiện tài khoản dịch vụ web (www-data, apache, nginx, tomcat) thực thi lệnh hệ thống qua Auditd (key webshell_command_exec) -->
+  <rule id="100410" level="12">
+    <if_sid>80700</if_sid>
+    <field name="audit.key">^webshell_command_exec$</field>
+    <list field="audit.exe" lookup="not_match_key">etc/lists/soc-web-allowed-bins</list>
+    <description>WARNING: Linux web server user (uid=$(audit.uid)) executed program $(audit.exe) (command: $(audit.command)).</description>
+    <group>soc_webshell_exec_linux,</group>
+    <mitre>
+      <id>T1505.003</id>
+      <id>T1059.004</id>
+    </mitre>
+  </rule>
+
+  <!-- Linux: Nâng lên level 14 khi tài khoản dịch vụ web thực thi công cụ trinh sát, tải mã độc, mở reverse shell hoặc truy cập tệp nhạy cảm -->
+  <rule id="100411" level="14">
+    <if_sid>100410</if_sid>
+    <field name="audit.exe" type="pcre2">/(whoami|id|uname|hostname|ip|ifconfig|ss|netstat|curl|wget|nc|ncat|netcat|socat|nmap|python[\d.]*|perl|ruby|lua|gcc|cc|chmod|chown|sudo|su|useradd|usermod|passwd|crontab|chattr)$</field>
+    <description>CRITICAL: Linux web server user executed recon, network or privilege utility $(audit.exe) (possible active web shell exploitation).</description>
+    <group>soc_webshell_exec_linux,</group>
+    <mitre>
+      <id>T1505.003</id>
+      <id>T1059.004</id>
+      <id>T1105</id>
+    </mitre>
+  </rule>
+
+  <!-- Tương quan đa tầng Windows: Tệp kịch bản web vừa được tạo/sửa rồi tiến trình web thực thi lệnh trong vòng 10 phút trên cùng máy chủ -->
+  <rule id="100412" level="15" timeframe="600">
+    <if_sid>100406,100407,100408</if_sid>
+    <if_matched_group>soc_webshell_file</if_matched_group>
+    <description>CRITICAL: Web script creation/modification followed by web server command execution within 10 minutes on Windows host (confirmed web shell compromise).</description>
+    <options>no_full_log</options>
+    <mitre>
+      <id>T1190</id>
+      <id>T1505.003</id>
+      <id>T1059.003</id>
+    </mitre>
+  </rule>
+
+  <!-- Tương quan đa tầng Linux: Tệp kịch bản web vừa được tạo/sửa rồi tài khoản web thực thi lệnh trong vòng 10 phút trên cùng máy chủ -->
+  <rule id="100413" level="15" timeframe="600">
+    <if_sid>100410,100411</if_sid>
+    <if_matched_group>soc_webshell_file</if_matched_group>
+    <description>CRITICAL: Web script creation/modification followed by web server command execution ($(audit.exe)) within 10 minutes on Linux host (confirmed web shell compromise).</description>
+    <mitre>
+      <id>T1190</id>
+      <id>T1505.003</id>
+      <id>T1059.004</id>
+    </mitre>
+  </rule>
+
+</group>

@@ -4,7 +4,7 @@
 <!-- Quy ước trường: sshd gán tên tài khoản vào dstuser (bí danh user), địa chỉ nguồn vào srcip. -->
 <group name="authentication,ssh,soc_root_ssh,">
 
-  <!-- ===================== ĐĂNG NHẬP THÀNH CÔNG BẰNG ROOT ===================== -->
+
 
   <!-- Mọi lần root vào bằng SSH đều đáng ghi nhận -->
   <rule id="100480" level="10">

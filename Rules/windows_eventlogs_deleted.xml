@@ -7,7 +7,6 @@
 <!-- 553 (0015-ossec_rules.xml): FIM báo tệp bị xóa (level 7), dùng để bắt tệp .evtx bị xóa. -->
 <group name="local,evtlog_clear,">
 
-
   <!-- Security Event 1102: gắn vào cả hai nhánh cha có sẵn (63103 và 60117) -->
   <rule id="100400" level="12">
     <if_sid>63103,60117</if_sid>
@@ -30,7 +29,7 @@
   </rule>
 
 
-  <!-- Con của 100401: kênh nhạy cảm bị xóa -->
+  <!-- Con của 100401: kênh ghi log nhạy cảm bị xóa -->
   <rule id="100402" level="12">
     <if_sid>100401</if_sid>
     <field name="win.logFileCleared.channel" type="pcre2">(?i)^(System|Security|Windows PowerShell|Microsoft-Windows-Sysmon/Operational|Microsoft-Windows-PowerShell/Operational|Microsoft-Windows-Windows Defender/Operational)$</field>
@@ -41,8 +40,7 @@
     <group>soc_evtlog_clear_win,</group>
   </rule>
 
-
-  <!-- Security Event 1100: ghi nhận để săn tìm, cũng sinh khi tắt máy -->
+  <!-- Security Event 1100: ghi lại trạng thái dịch vụ ghi log bị tát, cũng xẩy ra khi tắt bằng ps và shutdown -->
   <rule id="100403" level="3">
     <if_sid>63108</if_sid>
     <field name="win.system.eventID">^1100$</field>
@@ -54,7 +52,7 @@
   </rule>
 
 
-  <!-- Sysmon Event 1: lệnh xóa hoặc tắt kênh nhật ký -->
+  <!-- Bắt mọi trường hợp tắt log bằng cmd hoặc powershell với các dịch vụ như webtutil hay wmic, api windows, clear-eventlog-->
   <rule id="100404" level="12">
     <if_sid>61603</if_sid>
     <field name="win.eventdata.commandLine" type="pcre2">(?i)(\bwevtutil(\.exe)?["']?\s+(/\S+\s+)*(cl|clear-log)\b|\bwevtutil(\.exe)?["']?\s+(sl|set-log)\b.*/(e|enabled):\s*false\b|\b(Clear|Remove)-EventLog\b|\.ClearLog\s*\(|\bwmic\b.*\bNTEventLogFile\b.*\bClearEventLog\b)</field>
@@ -67,7 +65,7 @@
   </rule>
 
 
-  <!-- PowerShell Event 4104: cùng hành vi trong script block -->
+  <!-- PowerShell Event 4104: cùng hành vi trong script block của powershell-->
   <rule id="100405" level="12">
     <if_sid>91802</if_sid>
     <field name="win.eventdata.scriptBlockText" type="pcre2">(?is)(\bwevtutil(\.exe)?["']?\s+(/\S+\s+)*(cl|clear-log)\b|\bwevtutil(\.exe)?["']?\s+(sl|set-log)\b.{0,200}?/(e|enabled):\s*false\b|\b(Clear|Remove)-EventLog\b|\.ClearLog\s*\(|\bwmic\b.{0,200}?\bNTEventLogFile\b.{0,200}?\bClearEventLog\b)</field>
@@ -93,7 +91,7 @@
 
 
   <!-- Sysmon Event 1: tắt hoặc xóa chính sách audit -->
-  <rule id="100407" level="10">
+  <rule id="100407" level="12">
     <if_sid>61603</if_sid>
     <field name="win.eventdata.commandLine" type="pcre2">(?i)(\bauditpol(\.exe)?["']?\s+/(clear|remove)\b|\bauditpol(\.exe)?["']?\s+/set\b(?=.*/(success|failure):\s*disable))</field>
     <description>NOTICE: Command line clears or disables the Windows audit policy</description>
