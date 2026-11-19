@@ -93,7 +93,7 @@
     <mitre>
       <id>T1562.001</id>
     </mitre>
-    <group>soc_wz_tamper_win,</groksup>
+    <group>soc_wz_tamper_win,</group>
   </rule>
 
   <!-- cảnh báo khi file cấu hình bị thay đổi cụ thể là khóa client.keys, local_internal_options.conf -->
@@ -169,7 +169,7 @@
   <!-- Ngoại lệ Linux: tài khoản được phép dừng hoặc gỡ agent -->
   <rule id="100393" level="3">
     <if_sid>100388</if_sid>
-    <list field="srcuser" lookup="match_key">etc/lists/soc-agent-admins</list>
+    <list field="src_user" lookup="match_key">etc/lists/soc-agent-admins</list>
     <description>INFO: Wazuh agent stop or removal by an account listed in soc-agent-admins: $(command)</description>
     <group>soc_wz_expected_stop,</group>
   </rule>

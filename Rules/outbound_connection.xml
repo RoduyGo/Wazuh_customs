@@ -1,3 +1,4 @@
+<!-- Hành vi 15: kết nối chiều ra bất thường (C2, reverse shell). Dải ID 100540 đến 100559 (đổi từ 100500-100513 do trùng hành vi 13). Bản nháp, chưa chạy thử. -->
 <!-- 61605 (0595-win-sysmon_rules.xml): Sysmon Event 3, phát hiện kết nối mạng trên Windows (level 0, nhóm sysmon_event3). -->
 <!-- 61603 (0595-win-sysmon_rules.xml): Sysmon Event 1, tạo tiến trình mới trên Windows (level 0, nhóm sysmon_event1). -->
 <!-- 61650 (0595-win-sysmon_rules.xml): Sysmon Event 22, truy vấn DNS trên Windows (level 0, nhóm sysmon_eid22_detections). -->
@@ -8,7 +9,7 @@
 <group name="local,outbound_connection,">
 
   <!-- Rule nền Windows (Sysmon Event 3): Ghi nhận kết nối mạng chiều ra (outbound) tới IP ngoài mạng nội bộ RFC1918/loopback và ngoài danh sách soc-allow-dest-ip -->
-  <rule id="100500" level="5">
+  <rule id="100540" level="5">
     <if_sid>61605</if_sid>
     <field name="win.eventdata.initiated">^true$</field>
     <field name="win.eventdata.destinationIp" type="pcre2" negate="yes">^(10\.|127\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|22[4-9]\.|23\d\.|255\.255\.255\.255$|::1$|fe80:|fc00:|fd00:|ff00:)</field>
@@ -19,7 +20,7 @@
   </rule>
 
   <!-- Rule nền Windows (Security Event 5156 - WFP): Ghi nhận kết nối chiều ra (Direction %%14593) tới IP ngoài mạng nội bộ cho máy chưa cài Sysmon -->
-  <rule id="100501" level="5">
+  <rule id="100541" level="5">
     <if_sid>60103</if_sid>
     <field name="win.system.eventID">^5156$</field>
     <field name="win.eventdata.direction">^%%14593$</field>
@@ -31,8 +32,8 @@
   </rule>
 
   <!-- Phát hiện trình thông dịch lệnh hoặc LOLBins trên Windows mở kết nối trực tiếp ra Internet (Sysmon Event 3) -->
-  <rule id="100502" level="12">
-    <if_sid>100500</if_sid>
+  <rule id="100542" level="12">
+    <if_sid>100540</if_sid>
     <field name="win.eventdata.image" type="pcre2">(?i)\\(cmd|powershell|pwsh|wscript|cscript|mshta|rundll32|regsvr32|certutil|bitsadmin|msiexec|odbcconf|installutil|regasm|regsvcs|msbuild|cmstp|hh|notepad|calc|mspaint)\.exe$</field>
     <description>WARNING: Windows shell or LOLBin $(win.eventdata.image) initiated outbound connection to $(win.eventdata.destinationIp):$(win.eventdata.destinationPort).</description>
     <options>no_full_log</options>
@@ -45,8 +46,8 @@
   </rule>
 
   <!-- Phát hiện tiến trình chạy từ thư mục tạm, thư mục công cộng hoặc thùng rác trên Windows mở kết nối ra Internet -->
-  <rule id="100503" level="13">
-    <if_sid>100500</if_sid>
+  <rule id="100543" level="13">
+    <if_sid>100540</if_sid>
     <field name="win.eventdata.image" type="pcre2">(?i)^c:\\(users\\public\\|users\\[^\\]+\\appdata\\(local\\temp|roaming)\\|windows\\temp\\|programdata\\|temp\\|\$recycle\.bin\\|perflogs\\)</field>
     <list field="win.eventdata.image" lookup="not_match_key">etc/lists/soc-allow-outbound-apps</list>
     <description>WARNING: Process running from suspicious user/temp directory $(win.eventdata.image) connected to external IP $(win.eventdata.destinationIp):$(win.eventdata.destinationPort).</description>
@@ -59,8 +60,8 @@
   </rule>
 
   <!-- Phát hiện kết nối từ Windows ra Internet tới các cổng đặc trưng của C2, reverse shell, Tor hoặc đào tiền ảo -->
-  <rule id="100504" level="11">
-    <if_sid>100500</if_sid>
+  <rule id="100544" level="11">
+    <if_sid>100540</if_sid>
     <field name="win.eventdata.destinationPort" type="pcre2">^(1337|31337|3333|4443|4444|4445|5554|5555|6666|6667|6697|7777|8444|8888|9001|9030|9050|9051|9999|14444|45560)$</field>
     <list field="win.eventdata.image" lookup="not_match_key">etc/lists/soc-allow-outbound-apps</list>
     <description>NOTICE: Process $(win.eventdata.image) connected to high-risk C2/reverse-shell port $(win.eventdata.destinationPort) on external IP $(win.eventdata.destinationIp).</description>
@@ -73,8 +74,8 @@
   </rule>
 
   <!-- Phát hiện dịch vụ máy chủ (IIS, Apache, Nginx, Tomcat, SQL Server, MySQL, PostgreSQL) chủ động mở kết nối ra Internet -->
-  <rule id="100505" level="13">
-    <if_sid>100500</if_sid>
+  <rule id="100545" level="13">
+    <if_sid>100540</if_sid>
     <field name="win.eventdata.image" type="pcre2">(?i)\\(w3wp|httpd|nginx|php-cgi|tomcat\d*|sqlservr|mysqld|postgres|oracle)\.exe$</field>
     <description>WARNING: Server service process $(win.eventdata.image) initiated unexpected outbound connection to $(win.eventdata.destinationIp):$(win.eventdata.destinationPort) (possible reverse shell or C2).</description>
     <options>no_full_log</options>
@@ -87,7 +88,7 @@
   </rule>
 
   <!-- Phát hiện hành vi C2 beaconing lặp lại: cùng một tiến trình kết nối 15 lần tới cùng một IP bên ngoài trong 5 phút -->
-  <rule id="100506" level="10" frequency="15" timeframe="300">
+  <rule id="100546" level="10" frequency="15" timeframe="300">
     <if_matched_group>soc_outbound_win</if_matched_group>
     <same_field>win.eventdata.destinationIp</same_field>
     <same_field>win.eventdata.image</same_field>
@@ -103,7 +104,7 @@
   </rule>
 
   <!-- Phát hiện dòng lệnh khởi tạo reverse shell hoặc công cụ đường hầm (tunneling) trên Windows qua Event 4688 hoặc Sysmon Event 1 -->
-  <rule id="100507" level="13">
+  <rule id="100547" level="13">
     <if_sid>60103,61603</if_sid>
     <field name="win.eventdata.commandLine" type="pcre2">(?i)(System\.Net\.Sockets\.TcpClient|Invoke-PowerShellTcp|Invoke-ReverseShell|powercat\b|\bncat?(\.exe)?\b.*-[el]|\bsocat(\.exe)?\b.*exec:|\bplink(\.exe)?\b.*-R\s|\bssh(\.exe)?\b.*-R\s|\b(chisel|frpc|ngrok|cloudflared)(\.exe)?\b.*(client|tunnel|tcp|http|socks))</field>
     <description>WARNING: Reverse shell or C2 tunneling command executed on Windows: $(win.eventdata.commandLine).</description>
@@ -117,7 +118,7 @@
   </rule>
 
   <!-- Phát hiện truy vấn DNS tới dịch vụ Dynamic DNS, đường hầm công cộng hoặc tên miền con mã hóa dài bất thường (DNS tunneling) qua Sysmon Event 22 -->
-  <rule id="100508" level="11">
+  <rule id="100548" level="11">
     <if_sid>61650</if_sid>
     <field name="win.eventdata.queryName" type="pcre2">(?i)(\.(duckdns\.org|no-ip\.(com|org|biz)|ddns\.net|hopto\.org|zapto\.org|sytes\.net|ngrok(-free)?\.(app|io)|trycloudflare\.com|localto\.net|serveo\.net|burpcollaborator\.net|oastify\.com|interact\.sh)$|^[a-z0-9+/=_-]{52,}\.)</field>
     <list field="win.eventdata.queryName" lookup="not_match_key">etc/lists/soc-allow-domains</list>
@@ -131,7 +132,7 @@
   </rule>
 
   <!-- Rule nền Linux: Ghi nhận sự kiện khởi tạo kết nối mạng qua Auditd (khóa soc_outbound_connect) -->
-  <rule id="100509" level="5">
+  <rule id="100549" level="5">
     <if_sid>80700</if_sid>
     <field name="audit.key">^soc_outbound_connect$</field>
     <description>INFO: Linux process $(audit.exe) initiated network socket/connect syscall (uid=$(audit.uid)).</description>
@@ -139,8 +140,8 @@
   </rule>
 
   <!-- Linux: Phát hiện trình thông dịch shell hoặc công cụ dòng lệnh mở kết nối mạng trực tiếp (dấu hiệu reverse shell) -->
-  <rule id="100510" level="13">
-    <if_sid>100509</if_sid>
+  <rule id="100550" level="13">
+    <if_sid>100549</if_sid>
     <field name="audit.exe" type="pcre2">^/(usr/)?(s?bin)/(bash|sh|dash|zsh|ksh|csh|tcsh|nc|ncat|netcat|socat|telnet|awk|gawk|mawk|nawk|openssl|lua[\d.]*|perl[\d.]*|php[\d.]*|ruby[\d.]*)$</field>
     <list field="audit.exe" lookup="not_match_key">etc/lists/soc-allow-outbound-apps</list>
     <description>WARNING: Linux shell or scripting utility $(audit.exe) initiated direct network connection (uid=$(audit.uid), possible reverse shell).</description>
@@ -152,8 +153,8 @@
   </rule>
 
   <!-- Linux: Phát hiện tiến trình chạy từ thư mục tạm (/tmp, /var/tmp, /dev/shm, /run/shm) khởi tạo kết nối mạng -->
-  <rule id="100511" level="13">
-    <if_sid>100509</if_sid>
+  <rule id="100551" level="13">
+    <if_sid>100549</if_sid>
     <field name="audit.exe" type="pcre2">^/(tmp|var/tmp|dev/shm|run/shm)/</field>
     <description>WARNING: Linux binary executing from temporary directory $(audit.exe) initiated network connection (uid=$(audit.uid)).</description>
     <group>soc_outbound_linux,soc_c2_alert_linux,</group>
@@ -164,7 +165,7 @@
   </rule>
 
   <!-- Linux: Phát hiện dòng lệnh thực thi reverse shell hoặc đường hầm qua Auditd (syscall execve) -->
-  <rule id="100512" level="13">
+  <rule id="100552" level="13">
     <if_sid>80700</if_sid>
     <field name="audit.type">^SYSCALL$</field>
     <regex type="pcre2">(?i)(/dev/(tcp|udp)/|\b(ba)?sh\s+-i\b|\bncat?\b.*\s-[el]\s|\bsocat\b.*exec:|\bmkfifo\b.*/tmp/|\bpython[\d.]*\b.*socket.*subprocess|\bperl\b.*socket.*open|\bphp\b.*fsockopen|\b(chisel|frpc|ngrok|cloudflared)\b.*(client|tunnel|tcp|socks))</regex>
@@ -178,10 +179,10 @@
   </rule>
 
   <!-- Tương quan diện rộng: Phát hiện nhiều cảnh báo kết nối C2/reverse shell lặp lại 5 lần trong 10 phút trên toàn hệ thống (khớp chuỗi con soc_c2_alert) -->
-  <rule id="100513" level="14" frequency="5" timeframe="600">
+  <rule id="100553" level="14" frequency="5" timeframe="600">
     <if_matched_group>soc_c2_alert</if_matched_group>
     <global_frequency />
-    <description>CRITICAL: Multiple C2 or reverse shell connection alerts (5 events in 10 minutes) detected across monitored hosts.</description>
+    <description>WARNING: Multiple C2 or reverse shell connection alerts (5 events in 10 minutes) detected across monitored hosts.</description>
     <options>no_full_log</options>
     <mitre>
       <id>T1071</id>

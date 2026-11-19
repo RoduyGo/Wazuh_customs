@@ -211,8 +211,8 @@
   <rule id="100357" level="12">
     <if_sid>5400</if_sid>
     <field name="command" type="pcre2">(?i)(?:\b(?:curl|wget|fetch)\b[^|;]*\|\s*(?:sudo\s+(?:-\S+\s+)*)?(?:\S*/)?(?:ba|da|z|k|a)?sh\b|\b(?:ba|da|z|k|a)?sh\s+-c\s+[^|;]{0,20}\$\(\s*(?:curl|wget)\b|\bbase64\s+(?:-d|-D|--decode)\b[^;]*\|\s*(?:sudo\s+)?(?:\S*/)?(?:ba|da|z|k|a)?sh\b|\bexec\s+\d+\S{0,12}/dev/(?:tcp|udp)/|\s-i\s+\S{1,12}\s*/dev/(?:tcp|udp)/|/dev/(?:tcp|udp)/[^\s/]+/\d{1,5}\s+\d\S{1,12}\d\b|\b(?:nc|ncat|netcat|nc\.traditional)\s(?:[^|;]*\s)?(?:-e|-c|--exec|--sh-exec|--lua-exec)\b|\b(?:python[0-9.]*|perl|php)\b[^|]*?\s-[cer]\b.*sock.*(?:/bin/(?:ba)?sh|pty\.spawn|subprocess|dup2|\bexec\b|popen|\bsystem\b))</field>
-    <list field="user" lookup="not_match_key">etc/lists/soc-account-admins</list>
-    <description>WARNING: sudo ran a download-to-shell or reverse shell command as $(dstuser) by $(srcuser): $(command)</description>
+    <list field="src_user" lookup="not_match_key">etc/lists/soc-account-admins</list>
+    <description>WARNING: sudo ran a download-to-shell or reverse shell command as $(dstuser) by $(src_user): $(command)</description>
     <mitre>
       <id>T1059.004</id>
     </mitre>
