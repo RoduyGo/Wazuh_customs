@@ -91,7 +91,8 @@
 
   <!-- Một IP thử root nhiều lần (ngưỡng thấp hơn rule brute force chung vì root không nên được dùng qua SSH) -->
   <rule id="100487" level="12" frequency="4" timeframe="300">
-    <if_matched_group>authentication_failed</if_matched_group>
+    <!-- Gan vao 100112 vi 100112 (brute_force_failure.xml) bat 5716/5760 truoc, rule nay khong bao gio duoc xet neu treo vao nhom authentication_failed -->
+    <if_matched_sid>100112</if_matched_sid>
     <user>^root$</user>
     <same_source_ip />
     <same_user />
@@ -104,7 +105,8 @@
 
   <!-- Nhiều IP khác nhau cùng thử root: dò phân tán -->
   <rule id="100488" level="12" frequency="6" timeframe="600">
-    <if_matched_group>authentication_failed</if_matched_group>
+    <!-- Gan vao 100112 vi 100112 (brute_force_failure.xml) bat 5716/5760 truoc, rule nay khong bao gio duoc xet neu treo vao nhom authentication_failed -->
+    <if_matched_sid>100112</if_matched_sid>
     <user>^root$</user>
     <same_user />
     <different_srcip />
