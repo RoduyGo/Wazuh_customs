@@ -47,7 +47,7 @@ Phát hiện khi chạy `Tools/ubuntu-trigger.sh` trên ubuntu-lab (agent 014) n
   **Sửa:** `runuser -u "$u" -- expect -f "$f"`.
 - **Ca 12.1:** đổi rule mong đợi từ `100480,100482` → `100487`. 100480/100482 là rule đăng nhập root **thành công** (con của 5715), không thể bắn từ đăng nhập sai.
 
-### Vấn đề chưa sửa — agent 014 làm rơi log journald
+### Vấn đề chưa sửa — agent 014 làm rơi log journald (không tái hiện khi chạy lại 2026-11-23)
 
 2 dòng log có trong journald ubuntu-lab nhưng **không về manager** (log auditd cùng giây vẫn về):
 - 19:49:28 `labnosudo : user NOT in sudoers` (lần 1/3 của ca 13.4) → 100505 thiếu 1 lần nên không đủ ngưỡng 3.
@@ -66,4 +66,9 @@ Chưa rõ nguyên nhân (nghi bộ đọc journald của logcollector). Nếu ch
   - 5 lần `Failed password for root` → 100112, 100112, 100112, **100487**, 100112
   - `FAILED SU (to root)` → **100509**; `FAILED SU (to labsudo)` → 100508
   - 3 lần sudo sai rồi sudo thành công → 100500 ×3, **100507**
-- [ ] Chạy lại trigger thật ca 12.1, 13.4, 13.5, 13.7, 13.8 và đối chiếu `alerts.json` (cần IP LAN của host lab)
+- [x] 2026-11-23 09:32 chạy lại trigger thật, đối chiếu `alerts.json` — **cả 5 ca ĐẠT**:
+  - 13.4 → 100502 ×2, **100505** (lần thứ 3 thay bằng 100505)
+  - 13.5 → **100503** (lần này log journald không bị rơi)
+  - 13.7 → 100500 ×2, **100507**
+  - 13.8 → 100508 ×2 (su lên labsudo), **100509** ×4, **100510**
+  - 12.1 → 100112 ×3, **100487**, 100112 …
