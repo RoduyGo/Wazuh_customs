@@ -289,7 +289,15 @@ function c_16_8(){ Mark 16.8 100609 "Defender phat hien chuoi thu EICAR (vo hai)
   Start-Sleep 5
   Remove-Item $p -Force -ErrorAction SilentlyContinue }
 
-function hv16(){ c_16_5; Pause; c_16_6; Pause; c_16_8 }
+function c_16_3(){ Mark 16.3 100603 "ket noi UDP toi IP trong soc-ioc-ips (203.0.113.10)"
+  Copy-Item "$PSHOME\powershell.exe" "C:\LabTools\labioc.exe" -Force -ErrorAction SilentlyContinue
+  Run 'C:\LabTools\labioc.exe -NoProfile -Command "$u=New-Object Net.Sockets.UdpClient; $b=[Text.Encoding]::ASCII.GetBytes(''lab''); [void]$u.Send($b,$b.Length,''203.0.113.10'',443); Start-Sleep 2; $u.Close()"'
+  Remove-Item "C:\LabTools\labioc.exe" -Force -ErrorAction SilentlyContinue }
+
+function c_16_4(){ Mark 16.4 100605 "truy van DNS toi ten mien trong soc-ioc-domains"
+  Run 'powershell.exe -NoProfile -Command "Resolve-DnsName lab-ioc-test.example.com -ErrorAction SilentlyContinue | Out-Null; Start-Sleep 2"' }
+
+function hv16(){ c_16_3; Pause; c_16_4; Pause; c_16_5; Pause; c_16_6; Pause; c_16_8 }
 
 # =====================================================================
 # DIEU PHOI
@@ -355,6 +363,8 @@ switch ($cmd.ToLower()) {
   "15.4"  { c_15_4 }
   "15.5"  { c_15_5 }
   "15.6"  { c_15_6 }
+  "16.3"  { c_16_3 }
+  "16.4"  { c_16_4 }
   "16.5"  { c_16_5 }
   "16.6"  { c_16_6 }
   "16.8"  { c_16_8 }

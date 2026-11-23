@@ -383,7 +383,33 @@ c_14_6(){ mark 14.6 "100530,100531,100533" "tai khoan web www-data chay lenh who
   sleep 2
   rm -f /var/www/html/lab_test.php; }
 
-hv14_linux(){ c_14_1; pause; c_14_2; pause; c_14_3; pause; c_14_6; }
+c_14_4(){ mark 14.4 "100520,100524,100525" "HTTP GET webshell URI + 16 POST 200 toi cmd.php (nginx)"
+  mkdir -p /var/www/html
+  printf 'ok\n' > /var/www/html/cmd.php
+  printf 'ok\n' > /var/www/html/index2.php
+  cp /etc/nginx/sites-enabled/default /tmp/nginx-default.lab.bak 2>/dev/null || true
+  if ! grep -q "error_page 405 =200" /etc/nginx/sites-enabled/default 2>/dev/null; then
+    sed -i 's|location / {|location / {\n\t\terror_page 405 =200 $uri;|' /etc/nginx/sites-enabled/default
+    systemctl reload nginx 2>/dev/null || true
+  fi
+  sleep 1
+  curl -s "http://$SELF_IP/cmd.php?cmd=whoami" -o /dev/null
+  for i in $(seq 1 16); do
+    curl -s -X POST "http://$SELF_IP/index2.php" -d "a=$i" -o /dev/null
+  done
+  sleep 2
+  if [ -f /tmp/nginx-default.lab.bak ]; then
+    mv /tmp/nginx-default.lab.bak /etc/nginx/sites-enabled/default
+    systemctl reload nginx 2>/dev/null || true
+  fi
+  rm -f /var/www/html/cmd.php /var/www/html/index2.php; }
+
+c_16_1(){ mark 16.1 "100600,100601" "tao file trong /etc/profile.d trung MD5/SHA256 trong soc-ioc-hashes"
+  printf 'lab-ioc-test-2026\n' > /etc/profile.d/lab-ioc-hash.sh
+  sleep 5
+  rm -f /etc/profile.d/lab-ioc-hash.sh; }
+
+hv14_linux(){ c_14_1; pause; c_14_2; pause; c_14_3; pause; c_14_4; pause; c_14_6; }
 
 # =====================================================================
 linux_extra(){ hv2_linux; pause; hv3_linux; pause; hv4_linux; pause; hv10_linux; pause; hv12_ok; pause; hv15_linux; }
@@ -403,8 +429,8 @@ case "${1:-}" in
   12.1) c_12_1 ;; 12.2) c_12_2 ;; 12.3) c_12_3 ;;
   13.1) c_13_1 ;; 13.2) c_13_2 ;; 13.3) c_13_3 ;; 13.4) c_13_4 ;;
   13.5) c_13_5 ;; 13.6) c_13_6 ;; 13.7) c_13_7 ;; 13.8) c_13_8 ;;
-  14.1) c_14_1 ;; 14.2) c_14_2 ;; 14.3) c_14_3 ;; 14.6) c_14_6 ;;
-  15.8) c_15_8 ;;
+  14.1) c_14_1 ;; 14.2) c_14_2 ;; 14.3) c_14_3 ;; 14.4) c_14_4 ;; 14.6) c_14_6 ;;
+  15.8) c_15_8 ;; 16.1) c_16_1 ;;
   *) echo "Dung: sudo $0 {prep|clean|all|linux_extra|chang3|hv2..hv15|<ca>}"; exit 1 ;;
 esac
 [ -f "$LOG" ] && echo && echo "== Bang chung: $(pwd)/$LOG =="
