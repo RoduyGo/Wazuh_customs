@@ -94,7 +94,8 @@
 
   <!-- sudo thành công ngay sau nhiều lần thất bại: mật khẩu có thể đã bị đoán -->
   <rule id="100507" level="12" frequency="3" timeframe="600">
-    <if_sid>5402,5407</if_sid>
+    <!-- 5403: lan sudo thanh cong dau tien cua user ra 5403 (first time) thay vi 5402 -->
+    <if_sid>5402,5403,5407</if_sid>
     <if_matched_group>soc_sudo_fail</if_matched_group>
     <same_field>src_user</same_field>
     <description>WARNING: sudo succeeded for $(src_user) after repeated failures</description>
@@ -110,6 +111,9 @@
   <!-- su thất bại (không phải lên root) -->
   <rule id="100508" level="6">
     <if_sid>5301</if_sid>
+    <!-- Loai su len root: neu khong, 100508 bat het va 100509 khong bao gio duoc xet.
+         Decoder su khong tach truong user tu dong "FAILED SU (to root) x on pts/N" nen phai dung match. -->
+    <match negate="yes">FAILED SU (to root)| user=root</match>
     <description>INFO: su authentication failed</description>
     <mitre>
       <id>T1110</id>
@@ -119,7 +123,8 @@
 
   <!-- su lên root thất bại -->
   <rule id="100509" level="10">
-    <if_sid>5302</if_sid>
+    <if_sid>5301</if_sid>
+    <match>FAILED SU (to root)| user=root</match>
     <description>NOTICE: su to root failed</description>
     <mitre>
       <id>T1110</id>
