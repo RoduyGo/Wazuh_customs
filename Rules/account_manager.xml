@@ -158,7 +158,7 @@
   <!-- Linux -->
   <!-- Phát hiện tài khoản Linux được tạo với UID 0 (log useradd) -->
   <rule id="100311" level="12">
-    <if_sid>5902</if_sid>
+    <if_sid>5902,40501</if_sid>
     <regex type="pcre2">UID=0,</regex>
     <description>WARNING: Linux account $(dstuser) created with UID 0 (root privileges).</description>
     <mitre>

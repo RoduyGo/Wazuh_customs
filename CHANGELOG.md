@@ -121,3 +121,35 @@ Phát hiện khi chạy `Tools/win-trigger.ps1 all` trên `win10-lab` (agent 013
 - [x] `Tools/win-trigger.ps1` đã đồng bộ sang `win10-lab` (`C:\win-trigger.ps1`).
 - [x] Xác nhận `alerts.json` đã bắn thật toàn bộ 5 ca từng thiếu: `2.1` (`100120` @ `14:01:20`), `15.6` (`100548` @ `14:01:59`), `15.1` (`100542` @ `14:09:51`), `15.2` (`100543` @ `14:09:56`), `15.3` (`100544` @ `14:21:15`).
 - [ ] Ghi chú nhiễu mới: `100543` khớp cả `C:\ProgramData\...` nên `MsMpEng.exe` (Windows Defender) có bắn `100543` — cân nhắc thêm vào `etc/lists/soc-allow-outbound-apps` sau.
+
+
+---
+
+## 2026-11-23 — Mở rộng `ubuntu-trigger.sh` & sửa rule Linux bị rule mặc định nuốt (HV2, HV3, HV12, HV15)
+
+Nhánh `ai/linux-hv2-3-4-10-12-15`.
+Phát hiện khi chạy `ubuntu-trigger.sh linux_extra` trên `ubuntu-lab` (agent 014) khung `15:40–15:43` (7 rule mới đạt ngay: `100312–100315`, `100328–100330`).
+
+### 1. `brute_force_success.xml` — 100123, 100124, 100125 (HV2 Linux)
+- **Sửa:** `<if_sid>5715</if_sid>` → `<if_sid>5715,40112</if_sid>`.
+- **Vì sao:** Sau chuỗi SSH sai, đăng nhập thành công (`5715`) bị rule mặc định `40112` (*Multiple authentication failures followed by a success*) bắt trước lúc `15:41:26`, khiến `100123–100125` không được xét.
+
+### 2. `ssh_root_login.xml` — 100480, 100486, 100489 (HV12 Linux)
+- **Sửa:** `100480` và `100486` đổi `<if_sid>5715</if_sid>` → `<if_sid>5715,40112</if_sid>`; `100489` đổi `<if_matched_group>authentication_failed</if_matched_group>` → `<if_matched_sid>100112</if_matched_sid>`.
+- **Vì sao:** Đăng nhập SSH `root` thành công lúc `15:42:28` và `15:42:46` đều bị `40112` nuốt mất `5715`; còn `100489` dùng `authentication_failed` bị `100112` che giống lỗi cũ của `100487`.
+
+### 3. `account_manager.xml` — 100311 (HV3 Linux — tạo tài khoản UID 0)
+- **Sửa:** `<if_sid>5902</if_sid>` → `<if_sid>5902,40501</if_sid>`.
+- **Vì sao:** Lệnh `useradd -o -u 0` lúc `15:41:29` bị rule mặc định `40501` (*Attacks followed by the addition of an user*) nuốt mất `5902`.
+
+### 4. `outbound_connection.xml` — 100552 (HV15 Linux — auditd execve reverse shell)
+- **Sửa:** `<if_sid>80700</if_sid>` → `<if_sid>80700,80792</if_sid>`.
+- **Vì sao:** Rule mặc định `80792` bắt mọi sự kiện auditd `execve` trước `80700`.
+
+### 5. `Tools/ubuntu-trigger.sh` (mở rộng `linux_extra`)
+- Bổ sung 12 ca mới: `2.4`, `2.5`, `3.9`, `3.10`, `3.11`, `4.6`, `4.7`, `10.8`, `10.9`, `12.2`, `12.3`, `15.8`.
+
+### Trạng thái triển khai (đã hoàn tất Chặng 1 Linux)
+- [x] 4 file XML (`brute_force_success.xml`, `ssh_root_login.xml`, `account_manager.xml`, `outbound_connection.xml`) đã chép vào `/var/ossec/etc/rules/` trên `wazuh-mgr`, `wazuh-analysisd -t` OK, `wazuh-manager` active.
+- [x] Đã bật auditd (`99-soc-outbound.rules`, khóa `soc_outbound_connect`) và FIM realtime + `report_changes` (`/etc/sudoers.d,/etc/cron.d,/etc/systemd/system`) trên `ubuntu-lab`.
+- [x] Xác nhận `alerts.json` đã bắn thật 14 rule Linux mới (`100311–100315`, `100328–100330`, `100420`, `100457`, `100486`, `100489`, `100549`, `100551`) và đã tự động chụp + dán 8 ảnh vào Google Docs (`HV3`, `HV4`, `HV10`, `HV12`, `HV15`).
