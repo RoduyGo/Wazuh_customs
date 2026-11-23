@@ -298,7 +298,23 @@ c_12_3(){ mark 12.3 100489 "SSH root sai 3 lan roi dang nhap THANH CONG bang mat
   sleep 1
   root_ssh_restore; }
 
-hv12_ok(){ c_12_2; pause; c_12_3; }
+c_12_4(){ mark 12.4 "100482,100483" "SSH root bang KHOA cong khai tu ngoai allow-list (100482) va tu 127.0.0.1 ngoai gio (100483)"
+  root_ssh_enable
+  mkdir -p /root/.ssh && chmod 700 /root/.ssh
+  [ -f /root/.ssh/authorized_keys ] && cp /root/.ssh/authorized_keys /tmp/root_ak.lab.bak
+  rm -f /tmp/lab_root_key /tmp/lab_root_key.pub
+  ssh-keygen -t ed25519 -N "" -f /tmp/lab_root_key -q
+  cat /tmp/lab_root_key.pub >> /root/.ssh/authorized_keys
+  chmod 600 /root/.ssh/authorized_keys
+  ssh -i /tmp/lab_root_key -o IdentitiesOnly=yes -o PreferredAuthentications=publickey -o StrictHostKeyChecking=no "root@$SELF_IP" true >/dev/null 2>&1
+  sleep 2
+  ssh -i /tmp/lab_root_key -o IdentitiesOnly=yes -o PreferredAuthentications=publickey -o StrictHostKeyChecking=no "root@127.0.0.1" true >/dev/null 2>&1
+  sleep 1
+  if [ -f /tmp/root_ak.lab.bak ]; then mv /tmp/root_ak.lab.bak /root/.ssh/authorized_keys; else rm -f /root/.ssh/authorized_keys; fi
+  rm -f /tmp/lab_root_key /tmp/lab_root_key.pub
+  root_ssh_restore; }
+
+hv12_ok(){ c_12_2; pause; c_12_3; pause; c_12_4; }
 
 # =====================================================================
 # HV15 Linux - ket noi ra ngoai & reverse shell qua auditd (100549-100552)
@@ -426,7 +442,7 @@ case "${1:-}" in
   5.11) c_5_11 ;; 5.12) c_5_12 ;;
   9.1) c_9_1 ;; 9.3) c_9_3 ;; 9.4) c_9_4 ;; 9.6) c_9_6 ;; 9.7) c_9_7 ;; 9.8) c_9_8 ;; 9.9) c_9_9 ;;
   10.8) c_10_8 ;; 10.9) c_10_9 ;;
-  12.1) c_12_1 ;; 12.2) c_12_2 ;; 12.3) c_12_3 ;;
+  12.1) c_12_1 ;; 12.2) c_12_2 ;; 12.3) c_12_3 ;; 12.4) c_12_4 ;;
   13.1) c_13_1 ;; 13.2) c_13_2 ;; 13.3) c_13_3 ;; 13.4) c_13_4 ;;
   13.5) c_13_5 ;; 13.6) c_13_6 ;; 13.7) c_13_7 ;; 13.8) c_13_8 ;;
   14.1) c_14_1 ;; 14.2) c_14_2 ;; 14.3) c_14_3 ;; 14.4) c_14_4 ;; 14.6) c_14_6 ;;
