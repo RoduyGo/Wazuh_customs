@@ -169,3 +169,20 @@ Nhánh `ai/chang3-hv9-11-14-16`.
   - HV14: `100531` (`14.6`).
   - HV16: `100609` (`16.8` — Defender bắt EICAR Event 1116), `100611` (`16.5`), `100613` (`16.6`).
 - Đã tự động chụp headless và dán thêm 14 ảnh (`9.1, 9.3, 9.4, 9.7, 9.8, 9.9, 9.13, 11.3, 11.4, 11.6, 14.6, 16.5, 16.6, 16.8`) + `15.4` (`100546`) vào Google Docs (tổng **76 ảnh** trên **16 / 16 Google Docs**).
+
+---
+
+## 2026-11-24 — Đợt kiểm thử bổ sung HV7 Linux, HV14, HV5 (5.4), HV11 & điền mục IV
+
+Nhánh `ai/20261124-hv7-hv14-hv5-hv11`.
+- **`Tools/ubuntu-trigger.sh`:** Thêm `c_7_7` (`100388` — dùng `sudo systemctl disable wazuh-agent` rồi `enable` lại ngay để tránh dừng agent trước khi đẩy log), `c_7_8` (`100391` — `sudo iptables` chặn cổng 1514 rồi gỡ ngay), bổ sung `/bin/ls /tmp` trong `c_14_6` (`100530`). Đồng bộ sang `trigger/ubuntu-trigger.sh` và `ubuntu-lab`.
+- **Kết quả xác minh bắn thật trong `alerts.json` (+9 rule mới, tổng 138 rule `100xxx` đã bắn thật):**
+  - HV7 Linux (`ubuntu-lab`, 014): **`100388`** (`7.7`, 01:15:25), **`100391`** (`7.8`, 01:14:44).
+  - HV14 (`ubuntu-lab`, 014): **`100530`** (`14.6`, 01:13:24 — `/usr/bin/ls`).
+  - HV5 (`win10-lab`, 013): **`100342`** & **`100349`** (`5.4`, 01:18:24–01:18:34 — PowerShell download cradle).
+  - HV11 (`win10-lab`, 013): **`100460`** (`11.1`, 01:18:35 — `PSEXESVC`), **`100461`** (`smbexec`, 01:18:35), **`100465`** (`wmiexec/dcomexec`, 01:20:04), **`100466`** (`atexec`, 01:20:04).
+- **Ghi nhận kỹ thuật:**
+  - `100462` bị rule mặc định `92650` của Wazuh bắt trước (kể cả khi dùng `%systemroot%` chữ thường).
+  - `100465`/`100466` nếu gọi `cmd.exe` từ `powershell.exe` sẽ bị `92004` nuốt `61603`; chạy trực tiếp qua `cmd.exe` sẽ nổ đúng `100465`/`100466`.
+  - `100467` (WinRM) bị `AccessDenied` qua phiên SSH key không có vé Kerberos; `100601` bị `100600` (MD5) khớp trước trên cùng tệp mẫu; `100608` chưa cài ClamAV trên `ubuntu-lab`.
+- Đã tự động chụp Dashboard và dán thêm 5 ảnh (`7.7`, `7.8`, `14.6`, `5.4`, `11.1`) vào Google Docs (tổng **93 ảnh** trên **16 / 16 Google Docs**), đồng thời điền tự động **mục IV (Bảng ghi kết quả)** cho toàn bộ **16 / 16 Google Docs** (bao gồm tạo mới bảng 9×5 còn thiếu ở HV13).
