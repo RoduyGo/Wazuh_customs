@@ -153,3 +153,19 @@ Phát hiện khi chạy `ubuntu-trigger.sh linux_extra` trên `ubuntu-lab` (agen
 - [x] 4 file XML (`brute_force_success.xml`, `ssh_root_login.xml`, `account_manager.xml`, `outbound_connection.xml`) đã chép vào `/var/ossec/etc/rules/` trên `wazuh-mgr`, `wazuh-analysisd -t` OK, `wazuh-manager` active.
 - [x] Đã bật auditd (`99-soc-outbound.rules`, khóa `soc_outbound_connect`) và FIM realtime + `report_changes` (`/etc/sudoers.d,/etc/cron.d,/etc/systemd/system`) trên `ubuntu-lab`.
 - [x] Xác nhận `alerts.json` đã bắn thật 14 rule Linux mới (`100311–100315`, `100328–100330`, `100420`, `100457`, `100486`, `100489`, `100549`, `100551`) và đã tự động chụp + dán 8 ảnh vào Google Docs (`HV3`, `HV4`, `HV10`, `HV12`, `HV15`).
+
+
+---
+
+## 2026-11-23 — Chặng 3: Mở rộng `win-trigger.ps1` & `ubuntu-trigger.sh` cho HV9, HV11, HV14, HV16
+
+Nhánh `ai/chang3-hv9-11-14-16`.
+- Bổ sung lệnh `chang3` vào `Tools/win-trigger.ps1` (`hv9`, `hv11`, `hv16`) và `Tools/ubuntu-trigger.sh` (`hv9`, `hv14`), đồng bộ sang `trigger/` và 2 agent.
+- Trên `ubuntu-lab`: gỡ `/etc/audit/rules.d/99-soc-outbound.rules` (hết nhiễu `100549`), thêm `99-soc-webshell.rules` (khóa `webshell_command_exec` cho uid 33 `www-data`), mở rộng FIM `realtime="yes" report_changes="yes"` cho đường dẫn HV9 & `/var/www/html`.
+- **Kết quả xác nhận trong `alerts.json` (+17 rule mới → tổng 115 / 229 rule, đã phủ ảnh 16 / 16 Google Docs):**
+  - HV9 Windows: `100436` (`9.13`).
+  - HV9 Linux: `100422` (`9.3`), `100423` (`9.4`), `100426` & `100433` (`9.7`), `100427` & `100428` (`9.8`), `100429` (`9.1`), `100431` (`9.9`).
+  - HV11: `100473` (`11.3`), `100476` (`11.4`), `100474` & `100475` (`11.6`).
+  - HV14: `100531` (`14.6`).
+  - HV16: `100609` (`16.8` — Defender bắt EICAR Event 1116), `100611` (`16.5`), `100613` (`16.6`).
+- Đã tự động chụp headless và dán thêm 14 ảnh (`9.1, 9.3, 9.4, 9.7, 9.8, 9.9, 9.13, 11.3, 11.4, 11.6, 14.6, 16.5, 16.6, 16.8`) + `15.4` (`100546`) vào Google Docs (tổng **76 ảnh** trên **16 / 16 Google Docs**).

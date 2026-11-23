@@ -223,21 +223,95 @@ function hv8(){ Write-Host "== HV8 xoa event log (log cuc bo mat; log da gui ve 
   Run 'auditpol /set /subcategory:"Logon" /failure:enable' }
 
 # =====================================================================
+# HV9 Windows - FIM file he thong (100435, 100436, 100438)
+# =====================================================================
+function c_9_12(){ Mark 9.12 100435 "Windows: sua file hosts (FIM)"
+  $h = "C:\Windows\System32\drivers\etc\hosts"
+  $bak = "$env:TEMP\hosts.lab.bak"
+  Copy-Item $h $bak -Force
+  Add-Content -Path $h -Value "# lab-fim-test"
+  Start-Sleep 5
+  Copy-Item $bak $h -Force; Remove-Item $bak -Force -ErrorAction SilentlyContinue }
+
+function c_9_13(){ Mark 9.13 100436 "Windows: tao file trong thu muc Startup (FIM)"
+  $f = "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Startup\lab-fim-test.txt"
+  Set-Content -Path $f -Value "lab-fim-test"
+  Start-Sleep 5
+  Remove-Item $f -Force -ErrorAction SilentlyContinue }
+
+function c_9_14(){ Mark 9.14 100438 "Windows: tao DLL gia trong System32 (FIM)"
+  $f = "C:\Windows\System32\lab_fim_test.dll"
+  Set-Content -Path $f -Value "lab-fim-test"
+  Start-Sleep 5
+  Remove-Item $f -Force -ErrorAction SilentlyContinue }
+
+function hv9(){ c_9_12; Pause; c_9_13; Pause; c_9_14 }
+
+# =====================================================================
+# HV11 - Thuc thi lenh tu xa (100465, 100466, 100472-100476, 100478)
+# =====================================================================
+function c_11_3(){ Mark 11.3 "100472,100473" "WMIC /node:DC01 process call create"
+  Run ("wmic.exe /node:{0} process call create ""cmd.exe /c echo lab""" -f $DC) }
+
+function c_11_4(){ Mark 11.4 100476 "PowerShell Invoke-CimMethod Win32_Process Create -ComputerName"
+  Run ("powershell.exe -NoProfile -Command `"try { Invoke-CimMethod -ComputerName '$DC' -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine='cmd.exe /c echo lab'} -ErrorAction Stop } catch {}`"") }
+
+function c_11_5(){ Mark 11.5 100478 "ket noi cong WinRM 5985 toi DC01"
+  Run ("powershell.exe -NoProfile -Command `"`$c=New-Object Net.Sockets.TcpClient; try { `$c.Connect('$DC',5985) } catch {}; Start-Sleep 2; `$c.Close()`"") }
+
+function c_11_6(){ Mark 11.6 "100474,100475" "sc.exe va schtasks.exe tro toi DC01"
+  Run ("sc.exe \\{0} config LabNonExist start= demand" -f $DC)
+  Start-Sleep 1
+  Run ("schtasks.exe /create /s {0} /tn LabRemTask /tr calc.exe /sc once /st 23:59 /f" -f $DC)
+  Run ("schtasks.exe /delete /s {0} /tn LabRemTask /f" -f $DC) }
+
+function c_11_impacket(){ Mark 11.x "100465,100466" "mau dong lenh Impacket wmiexec/atexec (vo hai)"
+  Run 'cmd.exe /Q /c echo lab > \\127.0.0.1\C$\Windows\Temp\lab123456.tmp'
+  Start-Sleep 1
+  Run 'cmd.exe /c echo lab > C:\Windows\Temp\lab123456.tmp 2>&1'
+  Remove-Item 'C:\Windows\Temp\lab123456.tmp' -Force -ErrorAction SilentlyContinue }
+
+function hv11(){ c_11_3; Pause; c_11_4; Pause; c_11_5; Pause; c_11_6; Pause; c_11_impacket }
+
+# =====================================================================
+# HV16 - Malware / IOC match (100609, 100611, 100613)
+# =====================================================================
+function c_16_5(){ Mark 16.5 100611 "chuoi lenh xoa shadow copy (chi echo, vo hai)"
+  Run 'cmd.exe /c echo vssadmin delete shadows /all /quiet' }
+
+function c_16_6(){ Mark 16.6 100613 "3 canh bao malware/IOC trong 10 phut"
+  1..3 | ForEach-Object { Run 'cmd.exe /c echo vssadmin delete shadows /all /quiet'; Start-Sleep 1 } }
+
+function c_16_8(){ Mark 16.8 100609 "Defender phat hien chuoi thu EICAR (vo hai)"
+  $eicar = 'X5O!P%@AP[4\PZX54(P^)7CC)7}$' + 'EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'
+  $p = "C:\Users\Public\eicar_lab.txt"
+  try { Set-Content -Path $p -Value $eicar -Encoding Ascii -NoNewline } catch {}
+  Start-Sleep 5
+  Remove-Item $p -Force -ErrorAction SilentlyContinue }
+
+function hv16(){ c_16_5; Pause; c_16_6; Pause; c_16_8 }
+
+# =====================================================================
 # DIEU PHOI
 # =====================================================================
 function Run-All(){ hv1; Pause; hv2; Pause; hv3; Pause; hv4; Pause; hv5; Pause; hv10; Pause; hv15 }
+function Run-Chang3(){ hv9; Pause; hv11; Pause; hv16 }
 
 switch ($cmd.ToLower()) {
   "prep"  { Do-Prep }
   "clean" { Do-Clean }
   "all"   { Run-All }
+  "chang3"{ Run-Chang3 }
   "hv1"   { hv1 }
   "hv2"   { hv2 }
   "hv3"   { hv3 }
   "hv4"   { hv4 }
   "hv5"   { hv5 }
+  "hv9"   { hv9 }
   "hv10"  { hv10 }
+  "hv11"  { hv11 }
   "hv15"  { hv15 }
+  "hv16"  { hv16 }
   "hv6"   { hv6 }
   "hv7"   { hv7 }
   "hv8"   { hv8 }
@@ -262,17 +336,28 @@ switch ($cmd.ToLower()) {
   "5.7"   { c_5_7 }
   "5.8"   { c_5_8 }
   "5.9"   { c_5_9 }
+  "9.12"  { c_9_12 }
+  "9.13"  { c_9_13 }
+  "9.14"  { c_9_14 }
   "10.1"  { c_10_1 }
   "10.2"  { c_10_2 }
   "10.3"  { c_10_3 }
   "10.5"  { c_10_5 }
   "10.7"  { c_10_7 }
+  "11.3"  { c_11_3 }
+  "11.4"  { c_11_4 }
+  "11.5"  { c_11_5 }
+  "11.6"  { c_11_6 }
+  "11.x"  { c_11_impacket }
   "15.1"  { c_15_1 }
   "15.2"  { c_15_2 }
   "15.3"  { c_15_3 }
   "15.4"  { c_15_4 }
   "15.5"  { c_15_5 }
   "15.6"  { c_15_6 }
+  "16.5"  { c_16_5 }
+  "16.6"  { c_16_6 }
+  "16.8"  { c_16_8 }
   default {
     Write-Host "Dung: .\win-trigger.ps1 {prep|clean|all|hv1..hv5,hv10,hv15|hv6,hv7,hv8(pha hoai)|<ma ca>}"
     Write-Host "Vi du: .\win-trigger.ps1 prep   roi   .\win-trigger.ps1 all"
