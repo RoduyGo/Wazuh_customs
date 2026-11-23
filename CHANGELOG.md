@@ -60,7 +60,10 @@ Chưa rõ nguyên nhân (nghi bộ đọc journald của logcollector). Nếu ch
 - `soc-allow-ip` chỉ có `127.0.0.1`, `soc-allow-account` chỉ có `healthcheck_svc` → không chặn tài khoản/IP thử.
 
 ### Trạng thái triển khai lên manager (192.168.88.245)
-- [ ] Chép `sudo_failures.xml`, `ssh_root_login.xml` vào `/var/ossec/etc/rules/` (bản cũ lưu `*.bak-20261123`)
-- [ ] `wazuh-analysisd -t` OK
-- [ ] Restart `wazuh-manager`
-- [ ] Logtest lại + chạy lại ca 12.1, 13.4, 13.5, 13.7, 13.8
+- [x] 2026-11-23 09:15 chép `sudo_failures.xml`, `ssh_root_login.xml` vào `/var/ossec/etc/rules/` (bản cũ lưu `*.bak-20261123`)
+- [x] `wazuh-analysisd -t` OK, restart `wazuh-manager` → active
+- [x] Logtest lại với dòng log gốc:
+  - 5 lần `Failed password for root` → 100112, 100112, 100112, **100487**, 100112
+  - `FAILED SU (to root)` → **100509**; `FAILED SU (to labsudo)` → 100508
+  - 3 lần sudo sai rồi sudo thành công → 100500 ×3, **100507**
+- [ ] Chạy lại trigger thật ca 12.1, 13.4, 13.5, 13.7, 13.8 và đối chiếu `alerts.json` (cần IP LAN của host lab)
