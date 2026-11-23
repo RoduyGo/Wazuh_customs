@@ -170,7 +170,7 @@ function c_15_2(){ Mark 15.2 100543 "tien trinh tu thu muc Public ket noi ra ngo
   Run 'C:\Users\Public\labpub.exe -NoProfile -Command "try { Invoke-WebRequest https://1.1.1.1 -UseBasicParsing -TimeoutSec 3 | Out-Null } catch {}; Start-Sleep 2"'
   Remove-Item "C:\Users\Public\labpub.exe" -Force -ErrorAction SilentlyContinue }
 function c_15_3(){ Mark 15.3 100544 "ket noi toi cong 4444"
-  Run 'powershell.exe -NoProfile -Command "$c=New-Object Net.Sockets.TcpClient; try { $ar=$c.BeginConnect(\"1.1.1.1\",4444,$null,$null); $ar.AsyncWaitHandle.WaitOne(2000) | Out-Null } catch {}; Start-Sleep 2; $c.Close()"' }
+  Run 'powershell.exe -NoProfile -Command "$c=New-Object Net.Sockets.TcpClient; try { $ar=$c.BeginConnect(''1.1.1.1'',4444,$null,$null); $ar.AsyncWaitHandle.WaitOne(2000) | Out-Null } catch {}; Start-Sleep 2; $c.Close()"' }
 function c_15_5(){ Mark 15.5 100547 "dong lenh tao duong ham (chi in chuoi)"
   Run "cmd.exe /c echo ssh -R 9000:localhost:22 lab@example.com" }
 function c_15_6(){ Mark 15.6 100548 "truy van DNS toi Dynamic DNS"

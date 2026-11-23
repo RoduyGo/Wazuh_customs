@@ -10,7 +10,7 @@
 
   <!-- Rule nền Windows (Sysmon Event 3): Ghi nhận kết nối mạng chiều ra (outbound) tới IP ngoài mạng nội bộ RFC1918/loopback và ngoài danh sách soc-allow-dest-ip -->
   <rule id="100540" level="5">
-    <if_sid>61605</if_sid>
+    <if_sid>61605,92101</if_sid>
     <field name="win.eventdata.initiated">^true$</field>
     <field name="win.eventdata.destinationIp" type="pcre2" negate="yes">^(10\.|127\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|22[4-9]\.|23\d\.|255\.255\.255\.255$|::1$|fe80:|fc00:|fd00:|ff00:)</field>
     <list field="win.eventdata.destinationIp" lookup="not_address_match_key">etc/lists/soc-allow-dest-ip</list>
@@ -48,7 +48,7 @@
   <!-- Phát hiện tiến trình chạy từ thư mục tạm, thư mục công cộng hoặc thùng rác trên Windows mở kết nối ra Internet -->
   <rule id="100543" level="13">
     <if_sid>100540</if_sid>
-    <field name="win.eventdata.image" type="pcre2">(?i)^c:\\(users\\public\\|users\\[^\\]+\\appdata\\(local\\temp|roaming)\\|windows\\temp\\|programdata\\|temp\\|\$recycle\.bin\\|perflogs\\)</field>
+    <field name="win.eventdata.image" type="pcre2">(?i)^c:\\+(users\\+public\\+|users\\+[^\\]+\\+appdata\\+(local\\+temp|roaming)\\+|windows\\+temp\\+|programdata\\+|temp\\+|\$recycle\.bin\\+|perflogs\\+)</field>
     <list field="win.eventdata.image" lookup="not_match_key">etc/lists/soc-allow-outbound-apps</list>
     <description>WARNING: Process running from suspicious user/temp directory $(win.eventdata.image) connected to external IP $(win.eventdata.destinationIp):$(win.eventdata.destinationPort).</description>
     <options>no_full_log</options>

@@ -106,3 +106,12 @@ Phát hiện khi chạy `Tools/win-trigger.ps1 all` trên `win10-lab` (agent 013
 ### Trạng thái triển khai
 - [ ] Chờ người dùng chép `Rules/brute_force_success.xml` lên `wazuh-mgr` (`/var/ossec/etc/rules/`) và restart `wazuh-manager`
 - [ ] Chép `Tools/win-trigger.ps1` lên `win10-lab` (`C:\win-trigger.ps1`) và chạy lại `2.1`, `15.1`, `15.2`, `15.3`, `15.6`
+
+### 4. `outbound_connection.xml` — 100540, 100543 & `win-trigger.ps1` 15.3 (bổ sung sau lần chạy 14:01)
+
+- **Kết quả chạy lại 14:01:** `2.1` (**100120** lúc `14:01:20` trên `012`) và `15.6` (**100548** lúc `14:01:59` trên `013`) đã **ĐẠT**.
+- **`100540` (`15.1` — `100542`):** Đổi `<if_sid>61605</if_sid>` → `<if_sid>61605,92101</if_sid>`.
+  - **Vì sao:** Rule mặc định `92101` (`0810-sysmon_id_3.xml`, `level="0"`) bắt im lặng mọi kết nối TCP của `powershell.exe` trước `100540`, khiến Sysmon Event 3 của `powershell.exe` (xác nhận có ghi lúc `14:01:25` tới `1.1.1.1:443`) không bao giờ tới được `100540` và `100542`.
+- **`100543` (`15.2`):** Đổi `\\` trong regex đường dẫn thành `\\+` (`(?i)^c:\\+(users\\+public\\+|...)`).
+  - **Vì sao:** Decoder `windows_eventchannel` giữ 2 dấu gạch chéo ngược (`C:\\Users\\Public\\labpub.exe`) trong `win.eventdata.image`; bằng chứng log thô `100540` lúc `14:01:43` có `"image":"C:\\\\Users\\\\Public\\\\labpub.exe"` nên `^c:\\users\\public\\` không khớp.
+- **`win-trigger.ps1` (`15.3`):** Sửa `\"1.1.1.1\"` → `''1.1.1.1''` trong `-Command` để không lỗi cú pháp PowerShell.
