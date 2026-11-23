@@ -330,6 +330,27 @@ c_15_8(){ mark 15.8 "100549,100550,100551,100552" "bash + binary trong /tmp ket 
 hv15_linux(){ c_15_8; }
 
 # =====================================================================
+# HV7 Linux - dung agent & chan cong 1514 qua sudo (100388, 100391)
+# =====================================================================
+c_7_7(){ mark 7.7 100388 "sudo disable roi enable lai wazuh-agent"
+  exp_as labsudo "spawn sudo -k systemctl disable wazuh-agent
+expect \"assword\"
+send \"$TESTPW\r\"
+expect eof"
+  sleep 2
+  systemctl enable wazuh-agent 2>/dev/null || true; }
+
+c_7_8(){ mark 7.8 100391 "sudo iptables chan cong 1514 roi go ngay"
+  exp_as labsudo "spawn sudo -k iptables -A OUTPUT -p tcp --dport 1514 -j DROP
+expect \"assword\"
+send \"$TESTPW\r\"
+expect eof"
+  sleep 1
+  iptables -D OUTPUT -p tcp --dport 1514 -j DROP 2>/dev/null || true; }
+
+hv7_linux(){ c_7_8; pause; c_7_7; }
+
+# =====================================================================
 # HV9 Linux - FIM file he thong quan trong (100422, 100423, 100425-100429, 100431, 100433)
 # =====================================================================
 c_9_1(){ mark 9.1 100429 "sua /etc/hosts (FIM)"
@@ -392,7 +413,9 @@ c_14_3(){ mark 14.3 100523 "them chu ky ham eval() vao file PHP (FIM report_chan
   printf '<?php /* eval($_GET["x"]); */ ?>\n' >> /var/www/html/lab_test.php
   sleep 4; }
 
-c_14_6(){ mark 14.6 "100530,100531,100533" "tai khoan web www-data chay lenh whoami/id (auditd + tuong quan)"
+c_14_6(){ mark 14.6 "100530,100531,100533" "tai khoan web www-data chay lenh ls/whoami/id (auditd + tuong quan)"
+  runuser -u www-data -- /bin/ls /tmp >/dev/null 2>&1
+  sleep 1
   runuser -u www-data -- /usr/bin/whoami >/dev/null 2>&1
   sleep 1
   runuser -u www-data -- /usr/bin/id >/dev/null 2>&1
@@ -435,11 +458,12 @@ run_all(){ hv13; pause; hv1_ssh; pause; hv12; pause; hv5_linux; pause; linux_ext
 case "${1:-}" in
   prep) do_prep ;; clean) do_clean ;; all) run_all ;; linux_extra) linux_extra ;; chang3) chang3_linux ;;
   hv13) hv13 ;; hv12) hv12 ;; hv12_ok) hv12_ok ;; hv5) hv5_linux ;;
-  hv2) hv2_linux ;; hv3) hv3_linux ;; hv4) hv4_linux ;; hv9) hv9_linux ;; hv10) hv10_linux ;; hv14) hv14_linux ;; hv15) hv15_linux ;;
+  hv2) hv2_linux ;; hv3) hv3_linux ;; hv4) hv4_linux ;; hv7) hv7_linux ;; hv9) hv9_linux ;; hv10) hv10_linux ;; hv14) hv14_linux ;; hv15) hv15_linux ;;
   1.5) c_1_5 ;; 2.4) c_2_4 ;; 2.5) c_2_5 ;;
   3.9) c_3_9 ;; 3.10) c_3_10 ;; 3.11) c_3_11 ;;
   4.6) c_4_6 ;; 4.7) c_4_7 ;;
   5.11) c_5_11 ;; 5.12) c_5_12 ;;
+  7.7) c_7_7 ;; 7.8) c_7_8 ;;
   9.1) c_9_1 ;; 9.3) c_9_3 ;; 9.4) c_9_4 ;; 9.6) c_9_6 ;; 9.7) c_9_7 ;; 9.8) c_9_8 ;; 9.9) c_9_9 ;;
   10.8) c_10_8 ;; 10.9) c_10_9 ;;
   12.1) c_12_1 ;; 12.2) c_12_2 ;; 12.3) c_12_3 ;; 12.4) c_12_4 ;;
