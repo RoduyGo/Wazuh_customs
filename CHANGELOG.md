@@ -149,6 +149,7 @@ Phát hiện khi chạy `ubuntu-trigger.sh linux_extra` trên `ubuntu-lab` (agen
 ### 5. `Tools/ubuntu-trigger.sh` (mở rộng `linux_extra`)
 - Bổ sung 12 ca mới: `2.4`, `2.5`, `3.9`, `3.10`, `3.11`, `4.6`, `4.7`, `10.8`, `10.9`, `12.2`, `12.3`, `15.8`.
 
-### Trạng thái triển khai
-- [ ] Chờ người dùng chép 4 file XML (`brute_force_success.xml`, `ssh_root_login.xml`, `account_manager.xml`, `outbound_connection.xml`) từ `/tmp/` vào `/var/ossec/etc/rules/` trên `wazuh-mgr` và restart `wazuh-manager`.
-- [ ] Chờ người dùng bật cấu hình FIM + auditd (`soc_outbound_connect`) trên `ubuntu-lab` cho các ca `4.7`, `10.8`, `10.9`, `15.8`.
+### Trạng thái triển khai (đã hoàn tất Chặng 1 Linux)
+- [x] 4 file XML (`brute_force_success.xml`, `ssh_root_login.xml`, `account_manager.xml`, `outbound_connection.xml`) đã chép vào `/var/ossec/etc/rules/` trên `wazuh-mgr`, `wazuh-analysisd -t` OK, `wazuh-manager` active.
+- [x] Đã bật auditd (`99-soc-outbound.rules`, khóa `soc_outbound_connect`) và FIM realtime + `report_changes` (`/etc/sudoers.d,/etc/cron.d,/etc/systemd/system`) trên `ubuntu-lab`.
+- [x] Xác nhận `alerts.json` đã bắn thật 14 rule Linux mới (`100311–100315`, `100328–100330`, `100420`, `100457`, `100486`, `100489`, `100549`, `100551`) và đã tự động chụp + dán 8 ảnh vào Google Docs (`HV3`, `HV4`, `HV10`, `HV12`, `HV15`).
