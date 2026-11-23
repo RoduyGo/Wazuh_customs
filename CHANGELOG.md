@@ -72,3 +72,52 @@ Chưa rõ nguyên nhân (nghi bộ đọc journald của logcollector). Nếu ch
   - 13.7 → 100500 ×2, **100507**
   - 13.8 → 100508 ×2 (su lên labsudo), **100509** ×4, **100510**
   - 12.1 → 100112 ×3, **100487**, 100112 …
+
+
+---
+
+## 2026-11-23 — Sửa rule HV2 và script HV15 trên Win10 (chưa deploy)
+
+Nhánh `ai/hv2-hv15-fix`.
+Phát hiện khi chạy `Tools/win-trigger.ps1 all` trên `win10-lab` (agent 013) ngày 2026-11-23, khung 11:34–11:37, đối chiếu `alerts.json` trên manager (23/28 ca Đạt ngay; 5 ca thiếu: `2.1`, `15.1`, `15.2`, `15.3`, `15.6`).
+
+### 1. `brute_force_success.xml` — 100120, 100121, 100122 (HV2 Windows)
+
+| | Trước | Sau |
+|---|---|---|
+| `if_sid` | `60106` | `60106,92657` |
+
+**Vì sao:** Khi `labuser3` đăng nhập SMB (`logonType: 3`) thành công vào DC01 sau 6 lần sai (`100110`), Event `4624` bị rule mặc định **`92657`** của Wazuh (cùng là con của `60106`) bắt trước, khiến `100120`/`100121`/`100122` không được xét.
+**Bằng chứng:** `alerts.json` lúc `11:35:13` trên agent `012` ghi nhận `rule: 92657, eid: 4624, lt: 3, ip: 192.168.19.130` ngay sau chuỗi `100110` (`4625`), nhưng không có `100120`.
+
+### 2. Script `Tools/win-trigger.ps1` — Ca 15.1, 15.2, 15.3 (HV15)
+
+- **Ca `15.1` (`100542`) và `15.2` (`100543`):**
+  - **Vì sao:** `alerts.json` có nổ `100540` (Sysmon Event 3 ra `1.1.1.1:443`) nhưng trường `win.eventdata.image` bị ghi là `<unknown process>` do `powershell.exe` / `labcurl.exe` thoát quá nhanh trước khi Sysmon kịp tra tên tiến trình.
+  - **Sửa:** Giữ tiến trình sống thêm 2 giây (`Start-Sleep 2`) sau khi mở kết nối; riêng `15.2` chạy bản sao `C:\Users\Public\labpub.exe` kèm `Start-Sleep 2` rồi xóa ngay sau đó.
+- **Ca `15.3` (`100544` — kết nối cổng 4444):**
+  - **Vì sao:** Không thấy Event 3 nào tới cổng `4444` khi dùng `labcurl.exe` gọi `portquiz.net:4444`.
+  - **Sửa:** Dùng `System.Net.Sockets.TcpClient` trong PowerShell mở kết nối TCP trực tiếp tới `1.1.1.1:4444` (chờ 2s + `Start-Sleep 2`) để Sysmon chắc chắn ghi Event 3 tới cổng `4444`.
+
+### 3. Ghi chú ca 15.6 (`100548` — DNS Dynamic DNS)
+
+- **Bằng chứng:** `alerts.json` lúc `11:37:29` trên agent `013` có sự kiện Sysmon Event 22 cho `lab-test.duckdns.org`, nhưng bị rule tương quan `100553` (level 14, ngưỡng 5 `soc_c2_alert` trong 10 phút) thay thế trên sự kiện thứ 5. Không phải lỗi rule `100548`; cần chạy lại riêng `15.6` ngoài khung 10 phút trùng dồn nhiều cảnh báo `soc_c2_alert`.
+
+### Trạng thái triển khai
+- [ ] Chờ người dùng chép `Rules/brute_force_success.xml` lên `wazuh-mgr` (`/var/ossec/etc/rules/`) và restart `wazuh-manager`
+- [ ] Chép `Tools/win-trigger.ps1` lên `win10-lab` (`C:\win-trigger.ps1`) và chạy lại `2.1`, `15.1`, `15.2`, `15.3`, `15.6`
+
+### 4. `outbound_connection.xml` — 100540, 100543 & `win-trigger.ps1` 15.3 (bổ sung sau lần chạy 14:01)
+
+- **Kết quả chạy lại 14:01:** `2.1` (**100120** lúc `14:01:20` trên `012`) và `15.6` (**100548** lúc `14:01:59` trên `013`) đã **ĐẠT**.
+- **`100540` (`15.1` — `100542`):** Đổi `<if_sid>61605</if_sid>` → `<if_sid>61605,92101</if_sid>`.
+  - **Vì sao:** Rule mặc định `92101` (`0810-sysmon_id_3.xml`, `level="0"`) bắt im lặng mọi kết nối TCP của `powershell.exe` trước `100540`, khiến Sysmon Event 3 của `powershell.exe` (xác nhận có ghi lúc `14:01:25` tới `1.1.1.1:443`) không bao giờ tới được `100540` và `100542`.
+- **`100543` (`15.2`):** Đổi `\\` trong regex đường dẫn thành `\\+` (`(?i)^c:\\+(users\\+public\\+|...)`).
+  - **Vì sao:** Decoder `windows_eventchannel` giữ 2 dấu gạch chéo ngược (`C:\\Users\\Public\\labpub.exe`) trong `win.eventdata.image`; bằng chứng log thô `100540` lúc `14:01:43` có `"image":"C:\\\\Users\\\\Public\\\\labpub.exe"` nên `^c:\\users\\public\\` không khớp.
+- **`win-trigger.ps1` (`15.3`):** Dùng bản sao `C:\LabTools\labudp.exe` gửi UDP tới `1.1.1.1:4444` kèm `Start-Sleep 2` (vì TCP `:4444` ra ngoài bị timeout nên Windows không hoàn tất bắt tay TCP và Sysmon Event 3 không ghi log, còn nếu dùng `powershell.exe` chuẩn sẽ bị `100542` level 12 đè `100544` level 11).
+
+### Trạng thái triển khai (đã hoàn tất 28/28 ca `win-trigger.ps1 all`)
+- [x] `brute_force_success.xml` và `outbound_connection.xml` đã chép vào `/var/ossec/etc/rules/` trên `wazuh-mgr` (bản cũ lưu `*.bak-20261123`), `wazuh-analysisd -t` OK, `wazuh-manager` active.
+- [x] `Tools/win-trigger.ps1` đã đồng bộ sang `win10-lab` (`C:\win-trigger.ps1`).
+- [x] Xác nhận `alerts.json` đã bắn thật toàn bộ 5 ca từng thiếu: `2.1` (`100120` @ `14:01:20`), `15.6` (`100548` @ `14:01:59`), `15.1` (`100542` @ `14:09:51`), `15.2` (`100543` @ `14:09:56`), `15.3` (`100544` @ `14:21:15`).
+- [ ] Ghi chú nhiễu mới: `100543` khớp cả `C:\ProgramData\...` nên `MsMpEng.exe` (Windows Defender) có bắn `100543` — cân nhắc thêm vào `etc/lists/soc-allow-outbound-apps` sau.
