@@ -166,7 +166,7 @@
 
   <!-- Linux: Phát hiện dòng lệnh thực thi reverse shell hoặc đường hầm qua Auditd (syscall execve) -->
   <rule id="100552" level="13">
-    <if_sid>80700</if_sid>
+    <if_sid>80700,80792</if_sid>
     <field name="audit.type">^SYSCALL$</field>
     <regex type="pcre2">(?i)(/dev/(tcp|udp)/|\b(ba)?sh\s+-i\b|\bncat?\b.*\s-[el]\s|\bsocat\b.*exec:|\bmkfifo\b.*/tmp/|\bpython[\d.]*\b.*socket.*subprocess|\bperl\b.*socket.*open|\bphp\b.*fsockopen|\b(chisel|frpc|ngrok|cloudflared)\b.*(client|tunnel|tcp|socks))</regex>
     <description>WARNING: Linux reverse shell or tunneling command execution detected via Auditd (exe: $(audit.exe), uid: $(audit.uid)).</description>

