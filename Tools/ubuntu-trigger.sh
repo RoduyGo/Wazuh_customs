@@ -312,23 +312,98 @@ c_15_8(){ mark 15.8 "100549,100550,100551,100552" "bash + binary trong /tmp ket 
 hv15_linux(){ c_15_8; }
 
 # =====================================================================
+# HV9 Linux - FIM file he thong quan trong (100422, 100423, 100425-100429, 100431, 100433)
+# =====================================================================
+c_9_1(){ mark 9.1 100429 "sua /etc/hosts (FIM)"
+  cp /etc/hosts /tmp/hosts.lab.bak
+  echo "# lab-fim-test" >> /etc/hosts
+  sleep 4
+  mv /tmp/hosts.lab.bak /etc/hosts; }
+
+c_9_3(){ mark 9.3 100422 "them khoa gia vao /home/labsudo/.ssh/authorized_keys (FIM)"
+  mkdir -p /home/labsudo/.ssh
+  [ -f /home/labsudo/.ssh/authorized_keys ] && cp /home/labsudo/.ssh/authorized_keys /tmp/ak.lab.bak
+  echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILabTestKeyDummy0000000000000000000000000000 lab@test" >> /home/labsudo/.ssh/authorized_keys
+  sleep 4
+  if [ -f /tmp/ak.lab.bak ]; then mv /tmp/ak.lab.bak /home/labsudo/.ssh/authorized_keys; else rm -f /home/labsudo/.ssh/authorized_keys; fi; }
+
+c_9_4(){ mark 9.4 100423 "them file cau hinh sshd_config.d (FIM)"
+  echo "# lab-fim-test" > /etc/ssh/sshd_config.d/99-lab-fim.conf
+  sleep 4
+  rm -f /etc/ssh/sshd_config.d/99-lab-fim.conf; }
+
+c_9_6(){ mark 9.6 100425 "tao /etc/ld.so.preload rong (vo hai, FIM)"
+  : > /etc/ld.so.preload
+  sleep 4
+  rm -f /etc/ld.so.preload; }
+
+c_9_7(){ mark 9.7 "100426,100433" "them cau hinh ld.so.conf.d va modprobe.d (FIM)"
+  echo "# lab-fim-test" > /etc/ld.so.conf.d/lab-fim.conf
+  echo "# lab-fim-test" > /etc/modprobe.d/lab-fim.conf
+  sleep 4
+  rm -f /etc/ld.so.conf.d/lab-fim.conf /etc/modprobe.d/lab-fim.conf; }
+
+c_9_8(){ mark 9.8 "100427,100428" "sua file khoi dong shell (/etc/profile.d va .bashrc)"
+  echo "# lab-fim-test" > /etc/profile.d/lab-fim.sh
+  cp /home/labsudo/.bashrc /tmp/bashrc.lab.bak 2>/dev/null || true
+  echo "# lab-fim-test" >> /home/labsudo/.bashrc
+  sleep 4
+  rm -f /etc/profile.d/lab-fim.sh
+  [ -f /tmp/bashrc.lab.bak ] && mv /tmp/bashrc.lab.bak /home/labsudo/.bashrc; }
+
+c_9_9(){ mark 9.9 100431 "tao file moi trong /usr/bin (FIM)"
+  echo "#!/bin/sh" > /usr/bin/lab_fim_dummy
+  sleep 4
+  rm -f /usr/bin/lab_fim_dummy; }
+
+hv9_linux(){ c_9_1; pause; c_9_3; pause; c_9_4; pause; c_9_6; pause; c_9_7; pause; c_9_8; pause; c_9_9; }
+
+# =====================================================================
+# HV14 Linux - Webshell FIM & Auditd (100521-100523, 100530, 100531, 100533)
+# =====================================================================
+c_14_1(){ mark 14.1 100521 "tao file PHP moi trong /var/www/html (FIM 554)"
+  mkdir -p /var/www/html
+  printf '<?php echo "lab1"; ?>\n' > /var/www/html/lab_test.php
+  sleep 4; }
+
+c_14_2(){ mark 14.2 100522 "sua file PHP co san trong /var/www/html (FIM 550)"
+  printf '// lab2\n' >> /var/www/html/lab_test.php
+  sleep 4; }
+
+c_14_3(){ mark 14.3 100523 "them chu ky ham eval() vao file PHP (FIM report_changes)"
+  printf '<?php /* eval($_GET["x"]); */ ?>\n' >> /var/www/html/lab_test.php
+  sleep 4; }
+
+c_14_6(){ mark 14.6 "100530,100531,100533" "tai khoan web www-data chay lenh whoami/id (auditd + tuong quan)"
+  runuser -u www-data -- /usr/bin/whoami >/dev/null 2>&1
+  sleep 1
+  runuser -u www-data -- /usr/bin/id >/dev/null 2>&1
+  sleep 2
+  rm -f /var/www/html/lab_test.php; }
+
+hv14_linux(){ c_14_1; pause; c_14_2; pause; c_14_3; pause; c_14_6; }
+
+# =====================================================================
 linux_extra(){ hv2_linux; pause; hv3_linux; pause; hv4_linux; pause; hv10_linux; pause; hv12_ok; pause; hv15_linux; }
+chang3_linux(){ hv9_linux; pause; hv14_linux; }
 run_all(){ hv13; pause; hv1_ssh; pause; hv12; pause; hv5_linux; pause; linux_extra; }
 
 case "${1:-}" in
-  prep) do_prep ;; clean) do_clean ;; all) run_all ;; linux_extra) linux_extra ;;
+  prep) do_prep ;; clean) do_clean ;; all) run_all ;; linux_extra) linux_extra ;; chang3) chang3_linux ;;
   hv13) hv13 ;; hv12) hv12 ;; hv12_ok) hv12_ok ;; hv5) hv5_linux ;;
-  hv2) hv2_linux ;; hv3) hv3_linux ;; hv4) hv4_linux ;; hv10) hv10_linux ;; hv15) hv15_linux ;;
+  hv2) hv2_linux ;; hv3) hv3_linux ;; hv4) hv4_linux ;; hv9) hv9_linux ;; hv10) hv10_linux ;; hv14) hv14_linux ;; hv15) hv15_linux ;;
   1.5) c_1_5 ;; 2.4) c_2_4 ;; 2.5) c_2_5 ;;
   3.9) c_3_9 ;; 3.10) c_3_10 ;; 3.11) c_3_11 ;;
   4.6) c_4_6 ;; 4.7) c_4_7 ;;
   5.11) c_5_11 ;; 5.12) c_5_12 ;;
+  9.1) c_9_1 ;; 9.3) c_9_3 ;; 9.4) c_9_4 ;; 9.6) c_9_6 ;; 9.7) c_9_7 ;; 9.8) c_9_8 ;; 9.9) c_9_9 ;;
   10.8) c_10_8 ;; 10.9) c_10_9 ;;
   12.1) c_12_1 ;; 12.2) c_12_2 ;; 12.3) c_12_3 ;;
   13.1) c_13_1 ;; 13.2) c_13_2 ;; 13.3) c_13_3 ;; 13.4) c_13_4 ;;
   13.5) c_13_5 ;; 13.6) c_13_6 ;; 13.7) c_13_7 ;; 13.8) c_13_8 ;;
+  14.1) c_14_1 ;; 14.2) c_14_2 ;; 14.3) c_14_3 ;; 14.6) c_14_6 ;;
   15.8) c_15_8 ;;
-  *) echo "Dung: sudo $0 {prep|clean|all|linux_extra|hv2|hv3|hv4|hv5|hv10|hv12|hv12_ok|hv13|hv15|<ca>}"; exit 1 ;;
+  *) echo "Dung: sudo $0 {prep|clean|all|linux_extra|chang3|hv2..hv15|<ca>}"; exit 1 ;;
 esac
 [ -f "$LOG" ] && echo && echo "== Bang chung: $(pwd)/$LOG =="
 echo 'Dashboard: agent.id: "014" and rule.id: <ID>  (Last 15 minutes)'
