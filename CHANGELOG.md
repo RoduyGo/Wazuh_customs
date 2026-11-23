@@ -114,4 +114,10 @@ Phát hiện khi chạy `Tools/win-trigger.ps1 all` trên `win10-lab` (agent 013
   - **Vì sao:** Rule mặc định `92101` (`0810-sysmon_id_3.xml`, `level="0"`) bắt im lặng mọi kết nối TCP của `powershell.exe` trước `100540`, khiến Sysmon Event 3 của `powershell.exe` (xác nhận có ghi lúc `14:01:25` tới `1.1.1.1:443`) không bao giờ tới được `100540` và `100542`.
 - **`100543` (`15.2`):** Đổi `\\` trong regex đường dẫn thành `\\+` (`(?i)^c:\\+(users\\+public\\+|...)`).
   - **Vì sao:** Decoder `windows_eventchannel` giữ 2 dấu gạch chéo ngược (`C:\\Users\\Public\\labpub.exe`) trong `win.eventdata.image`; bằng chứng log thô `100540` lúc `14:01:43` có `"image":"C:\\\\Users\\\\Public\\\\labpub.exe"` nên `^c:\\users\\public\\` không khớp.
-- **`win-trigger.ps1` (`15.3`):** Sửa `\"1.1.1.1\"` → `''1.1.1.1''` trong `-Command` để không lỗi cú pháp PowerShell.
+- **`win-trigger.ps1` (`15.3`):** Dùng bản sao `C:\LabTools\labudp.exe` gửi UDP tới `1.1.1.1:4444` kèm `Start-Sleep 2` (vì TCP `:4444` ra ngoài bị timeout nên Windows không hoàn tất bắt tay TCP và Sysmon Event 3 không ghi log, còn nếu dùng `powershell.exe` chuẩn sẽ bị `100542` level 12 đè `100544` level 11).
+
+### Trạng thái triển khai (đã hoàn tất 28/28 ca `win-trigger.ps1 all`)
+- [x] `brute_force_success.xml` và `outbound_connection.xml` đã chép vào `/var/ossec/etc/rules/` trên `wazuh-mgr` (bản cũ lưu `*.bak-20261123`), `wazuh-analysisd -t` OK, `wazuh-manager` active.
+- [x] `Tools/win-trigger.ps1` đã đồng bộ sang `win10-lab` (`C:\win-trigger.ps1`).
+- [x] Xác nhận `alerts.json` đã bắn thật toàn bộ 5 ca từng thiếu: `2.1` (`100120` @ `14:01:20`), `15.6` (`100548` @ `14:01:59`), `15.1` (`100542` @ `14:09:51`), `15.2` (`100543` @ `14:09:56`), `15.3` (`100544` @ `14:21:15`).
+- [ ] Ghi chú nhiễu mới: `100543` khớp cả `C:\ProgramData\...` nên `MsMpEng.exe` (Windows Defender) có bắn `100543` — cân nhắc thêm vào `etc/lists/soc-allow-outbound-apps` sau.
