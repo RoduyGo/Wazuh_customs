@@ -75,6 +75,12 @@ function c_1_2(){ Mark 1.2 100115 "password spraying: 1 mat khau cho 6 tai khoan
 function c_1_3(){ Mark 1.3 100118 "doan cham: 20 lan sai cach nhau 20 giay (labuser2)"
   1..20 | ForEach-Object { Run ('net use \\{0}\IPC$ /user:{1}\labuser2 SaiMatKhau{2}' -f $DC,$DOM,$_); Start-Sleep 20 }
   Run "net use * /delete /y" }
+function c_1_8(){ Mark 1.8 100118 "doan cham: 34 lan sai, moi 30 giay (100118 chi dem su kien 100110 nen can >30 lan; <10 su kien/120s de 100113 khong chen), ~17 phut"
+  1..34 | ForEach-Object { Run ('net use \\{0}\IPC$ /user:{1}\labuser2 SaiMatKhau{2}' -f $DC,$DOM,$_); Start-Sleep 30 }
+  Run "net use * /delete /y" }
+function c_1_6(){ Mark 1.6 100118 "doan cham: 34 lan sai, moi 15 giay (<10 lan/120s de 100113 khong chen), labuser2, ~9 phut"
+  1..34 | ForEach-Object { Run ('net use \\{0}\IPC$ /user:{1}\labuser2 SaiMatKhau{2}' -f $DC,$DOM,$_); Start-Sleep 15 }
+  Run "net use * /delete /y" }
 function hv1(){ c_1_1; Pause; c_1_2 }
 
 # =====================================================================
@@ -104,6 +110,50 @@ function c_3_5(){ Mark 3.5 100306 "tao hang loat 5 tai khoan"
 function c_3_7(){ Mark 3.7 100308 "tao tai khoan roi them vao Administrators"
   Run "net user labtest2 $PW /add"; Run "net localgroup Administrators labtest2 /add"
   Run "net localgroup Administrators labtest2 /delete"; Run "net user labtest2 /delete" }
+function c_3_9(){ Mark 3.9 "100301" "tao labtest9 roi vo hieu hoa va xoa bang Win10-agent (da them vao soc-account-admins nen 100304 khong chen)"
+  Run "net user labtest9 $PW /add"; Run "net user labtest9 /active:no"; Run "net user labtest9 /delete" }
+function c_3_8(){ Mark 3.8 "100300,100301,100305" "tao labpriv (trong soc-privileged-accounts) roi vo hieu hoa va xoa"
+  Run "net user labpriv $PW /add"; Run "net user labpriv /active:no"; Run "net user labpriv /delete" }
+
+function c_11_7(){ Mark 11.7 100477 "ghi file .bat rong len admin share C$ (Event 5145, can Audit Detailed File Share)"
+  Run "auditpol /set /subcategory:""Detailed File Share"" /success:enable"
+  Run "type nul > \\127.0.0.1\C$\Windows\Temp\lab477.bat"
+  Run "del /f /q \\127.0.0.1\C$\Windows\Temp\lab477.bat" }
+
+# ---- Moi truong IIS (da cai IIS + ASP tren Win10), PsExec, dich vu bao mat ----
+function c_14_8(){ Mark 14.8 "100526,100527,100528,100529,100532" "IIS: w3wp.exe ghi file .bat roi chay cmd.exe (whoami va chuoi -enc vo hai)"
+  $root = "C:\inetpub\wwwroot"
+  New-Item -ItemType Directory -Force -Path "$root\up" | Out-Null
+  & icacls "$root\up" /grant "IIS_IUSRS:(OI)(CI)M" "IUSR:(OI)(CI)M" | Out-Null
+  $asp1 = '<% Set fso=CreateObject("Scripting.FileSystemObject") : Set f=fso.CreateTextFile("C:\inetpub\wwwroot\up\lab_drop.bat",True) : f.Write "@echo lab" : f.Close : Response.Write "dropped" %>'
+  $asp2 = '<% Set sh=CreateObject("WScript.Shell") : Set ex=sh.Exec("cmd.exe /c whoami") : Response.Write ex.StdOut.ReadAll %>'
+  $asp3 = '<% Set sh=CreateObject("WScript.Shell") : Set ex=sh.Exec("cmd.exe /c echo powershell -enc VwByAGkAdABlAC0ATwB1AHQAcAB1AHQAIABsAGEAYgA=") : Response.Write ex.StdOut.ReadAll %>'
+  Set-Content "$root\up\drop.asp" $asp1 -Encoding Ascii; Set-Content "$root\up\run.asp" $asp2 -Encoding Ascii; Set-Content "$root\up\enc.asp" $asp3 -Encoding Ascii
+  foreach($u in "drop","run","enc"){ try { Invoke-WebRequest -UseBasicParsing "http://127.0.0.1/up/$u.asp" -TimeoutSec 20 | Out-Null } catch { Write-Host "($u) $($_.Exception.Message)" }; Start-Sleep 3 }
+  Remove-Item "$root\up\lab_drop.bat" -Force -ErrorAction SilentlyContinue }
+
+function c_11_8(){ Mark 11.8 "100463,100471" "PsExec that: chay cuc bo -s (PSEXESVC sinh cmd => 100463) va ban doi ten khong co dich \\host (=> 100471)"
+  New-Item -ItemType Directory -Force -Path C:\LabTools | Out-Null
+  Run "C:\PsExec.exe -accepteula -nobanner -s cmd.exe /c whoami"; Start-Sleep 4
+  Copy-Item C:\PsExec.exe C:\LabTools\svcupd.exe -Force
+  Run "C:\LabTools\svcupd.exe -accepteula -nobanner -?"; Start-Sleep 2
+  Remove-Item C:\LabTools\svcupd.exe -Force -ErrorAction SilentlyContinue }
+
+function c_6_11(){ Mark 6.11 "100371,100372,100373" "dich vu bao mat gia (Telephony, Windows Search trong soc-security-services): dung, kill, disabled"
+  Run "sc.exe start TapiSrv"; Start-Sleep 3; Run "sc.exe stop TapiSrv"; Start-Sleep 3
+  Run "sc.exe config TapiSrv start= disabled"; Start-Sleep 2; Run "sc.exe config TapiSrv start= demand"
+  Run "sc.exe failure WSearch reset= 0 actions= none/0"   # khong tu khoi dong lai => Event 7034 thay vi 7031 (7031 bi 61107 chiem)
+  Run "taskkill /f /im SearchIndexer.exe"; Start-Sleep 5
+  Run "sc.exe failure WSearch reset= 86400 actions= restart/60000/restart/60000//"; Run "sc.exe start WSearch" }
+
+function c_16_10(){ Mark 16.10 "100602" "chay file .exe co OriginalFileName=mimikatz.exe (chuong trinh rong tu bien dich)"
+  $d="C:\LabTools"; New-Item -ItemType Directory -Force -Path $d | Out-Null
+  $src="$d\lab_empty.cs"; Set-Content $src 'class P{static void Main(){}}' -Encoding Ascii
+  $csc = "$env:windir\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+  & $csc /nologo /out:"$d\mimikatz.exe" $src | Out-Null
+  Run "C:\LabTools\mimikatz.exe"; Start-Sleep 3
+  Remove-Item "$d\mimikatz.exe","$src" -Force -ErrorAction SilentlyContinue }
+
 function hv3(){ c_3_1; Pause; c_3_2; Pause; c_3_3; Pause; c_3_5; Pause; c_3_7 }
 
 # =====================================================================
@@ -326,6 +376,8 @@ switch ($cmd.ToLower()) {
   "1.1"   { c_1_1 }
   "1.2"   { c_1_2 }
   "1.3"   { c_1_3 }
+  "1.6"   { c_1_6 }
+  "1.8"   { c_1_8 }
   "2.1"   { c_2_1 }
   "2.3"   { c_2_3 }
   "3.1"   { c_3_1 }
@@ -333,6 +385,12 @@ switch ($cmd.ToLower()) {
   "3.3"   { c_3_3 }
   "3.5"   { c_3_5 }
   "3.7"   { c_3_7 }
+  "3.8"   { c_3_8 }
+  "14.8"  { c_14_8 }
+  "11.8"  { c_11_8 }
+  "6.11"  { c_6_11 }
+  "16.10" { c_16_10 }
+  "3.9"   { c_3_9 }
   "4.1"   { c_4_1 }
   "4.4"   { c_4_4 }
   "4.5"   { c_4_5 }
@@ -355,6 +413,7 @@ switch ($cmd.ToLower()) {
   "11.3"  { c_11_3 }
   "11.4"  { c_11_4 }
   "11.5"  { c_11_5 }
+  "11.7"  { c_11_7 }
   "11.6"  { c_11_6 }
   "11.x"  { c_11_impacket }
   "15.1"  { c_15_1 }

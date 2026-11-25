@@ -76,9 +76,9 @@
 
   <!-- Phát hiện một IP gửi liên tiếp 15 yêu cầu HTTP POST thành công tới tệp kịch bản động trong 120 giây (dấu hiệu phiên điều khiển web shell mã hóa như Behinder/Godzilla) -->
   <rule id="100525" level="12" frequency="15" timeframe="120">
-    <if_matched_group>soc_web_post_script</if_matched_group>
+    <if_matched_sid>100520</if_matched_sid>
     <same_source_ip />
-    <same_field>url</same_field>
+    <same_url />
     <list field="srcip" lookup="not_address_match_key">etc/lists/soc-allow-ip</list>
     <list field="url" lookup="not_match_key">etc/lists/soc-allow-post-urls</list>
     <description>WARNING: High-frequency HTTP POST requests (15 in 120s) to script $(url) from $(srcip) (possible encrypted web shell session).</description>

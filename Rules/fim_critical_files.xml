@@ -5,10 +5,10 @@
 
   <!-- ===================== LINUX ===================== -->
 
-  <!-- Tài khoản và quyền: passwd, shadow, group, gshadow, sudoers, sudoers.d -->
+  <!-- Tài khoản và quyền: passwd, shadow, group, gshadow. sudoers và sudoers.d do 100331 (add_to_privileage_Group.xml) xử lý, vì 100420 bắt trước làm 100331 không bao giờ được xét -->
   <rule id="100420" level="12">
     <if_sid>550,553,554</if_sid>
-    <field name="file" type="pcre2">^/etc/(?:passwd|shadow|group|gshadow|sudoers|sudoers\.d/[^/]+)$</field>
+    <field name="file" type="pcre2">^/etc/(?:passwd|shadow|group|gshadow)$</field>
     <description>WARNING: Linux account or sudo file changed: $(file)</description>
     <mitre>
       <id>T1098</id>
