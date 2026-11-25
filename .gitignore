@@ -6,3 +6,6 @@ Tools/
 *.swp
 *~
 .DS_Store
+
+# Changelog noi bo
+CHANGELOG.md
