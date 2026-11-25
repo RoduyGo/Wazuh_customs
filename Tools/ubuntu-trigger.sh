@@ -191,6 +191,60 @@ c_2_5(){ mark 2.5 "100124,100125" "11 lan SSH sai roi dang nhap dung (labnosudo)
   sleep 1
   ssh_ok labnosudo "$TESTPW"; }
 
+c_2_6(){ mark 2.6 "100123,100124,100125,100119" "9 sai+dung (labsudo), 14 sai+dung (labnosudo), 20 sai nua roi dung: vuot nguong frequency+1"
+  for i in $(seq 1 9); do ssh_fail labsudo; done; sleep 1; ssh_ok labsudo "$TESTPW"
+  sleep 3
+  for i in $(seq 1 14); do ssh_fail labnosudo; done; sleep 1; ssh_ok labnosudo "$TESTPW"
+  sleep 3
+  for i in $(seq 1 20); do ssh_fail labsudo; done; sleep 1; ssh_ok labsudo "$TESTPW"; }
+
+lo_fail(){ sshpass -p "sai$RANDOM" ssh -o PreferredAuthentications=password -o StrictHostKeyChecking=no -o ConnectTimeout=5 "$1@127.0.0.1" true >/dev/null 2>&1; }
+lo_ok(){ sshpass -p "$2" ssh -o PreferredAuthentications=password -o StrictHostKeyChecking=no -o ConnectTimeout=5 "$1@127.0.0.1" true >/dev/null 2>&1; }
+c_2_7(){ mark 2.7 100124 "13 lan sai roi dung tu 127.0.0.1 (allow-list IP nen 100123 bi bo qua, 100124 theo tai khoan van xet)"
+  for i in $(seq 1 13); do lo_fail labnosudo; done; sleep 1; lo_ok labnosudo "$TESTPW"; }
+c_2_8(){ mark 2.8 100125 "30 lan sai nhanh (100114 nho nhieu lan), cho 16 phut (het cua so 100123/100124), roi dang nhap dung, ~18 phut"
+  for i in $(seq 1 30); do ssh_fail labsudo; done; sleep 960; ssh_ok labsudo "$TESTPW"; }
+c_1_7(){ mark 1.7 100119 "36 lan sai cham (25s/lan), luan phien 6 tai khoan de khong dinh 100114/100117, ~15 phut"
+  for i in $(seq 1 6); do for u in labsudo labnosudo labtest3 labtest4 labtest5 labtest6; do ssh_fail $u; sleep 25; done; done; }
+
+# ---- setup (chay bang root qua script nay) ----
+setup_show_syscheck(){ sed -n '/<syscheck>/,/<\/syscheck>/p' /var/ossec/etc/ossec.conf | grep -vE '^\s*<!--|^\s*$' | head -60; }
+setup_fim(){ cp -p /var/ossec/etc/ossec.conf /var/ossec/etc/ossec.conf.bak-20261125
+  grep -q 'ld.so.preload' /var/ossec/etc/ossec.conf || sed -i 's|</syscheck>|  <directories realtime="yes" report_changes="yes">/etc/ld.so.preload</directories>\n  </syscheck>|' /var/ossec/etc/ossec.conf
+  [ -e /etc/ld.so.preload ] || : > /etc/ld.so.preload
+  systemctl restart wazuh-agent; sleep 5; systemctl is-active wazuh-agent; grep -c 'ld.so.preload' /var/ossec/etc/ossec.conf; }
+setup_whodata(){ cp -p /var/ossec/etc/ossec.conf /var/ossec/etc/ossec.conf.bak2-20261125
+  sed -i 's|,/var/www/html</directories>|</directories>|' /var/ossec/etc/ossec.conf
+  grep -q 'whodata="yes".*var/www/html' /var/ossec/etc/ossec.conf || sed -i 's|</syscheck>|  <directories whodata="yes" report_changes="yes">/var/www/html</directories>\n  </syscheck>|' /var/ossec/etc/ossec.conf
+  systemctl restart wazuh-agent; sleep 8; systemctl is-active wazuh-agent; grep -n 'var/www/html' /var/ossec/etc/ossec.conf; }
+c_14_9(){ mark 14.9 "100521,100522,100523,100533" "xoa file, tao moi, sua, them eval(), roi www-data chay lenh (whodata)"
+  rm -f /var/www/html/lab_test.php; sleep 5
+  printf '<?php echo "lab1"; ?>\n' > /var/www/html/lab_test.php; sleep 6
+  printf '// lab2\n' >> /var/www/html/lab_test.php; sleep 6
+  printf '<?php /* eval($_GET["x"]); */ ?>\n' >> /var/www/html/lab_test.php; sleep 6
+  runuser -u www-data -- /bin/ls /tmp >/dev/null 2>&1; sleep 2
+  runuser -u www-data -- /usr/bin/id >/dev/null 2>&1; sleep 4; }
+c_14_10(){ mark 14.10 "100521,100522" "tao file PHP vo hai roi sua noi dung vo hai (khong eval) de khong bi 100523 chiem (whodata)"
+  rm -f /var/www/html/lab_benign.php; sleep 5
+  printf '<?php echo "ok"; ?>\n' > /var/www/html/lab_benign.php; sleep 6
+  printf '// them dong\n' >> /var/www/html/lab_benign.php; sleep 6
+  rm -f /var/www/html/lab_benign.php; sleep 3; }
+c_15_9(){ mark 15.9 "100549,100550,100551,100552" "bat tam auditd connect (khoa soc_outbound_connect), chay 15.8, roi go lai de tranh nhieu"
+  printf '%s\n' '-a always,exit -F arch=b64 -S connect -F a2=16 -F success=1 -k soc_outbound_connect' > /etc/audit/rules.d/99-soc-outbound.rules
+  augenrules --load >/dev/null 2>&1; sleep 3
+  c_15_8; sleep 8
+  rm -f /etc/audit/rules.d/99-soc-outbound.rules; augenrules --load >/dev/null 2>&1; }
+setup_clamav(){ export DEBIAN_FRONTEND=noninteractive
+  apt-get install -y clamav clamav-daemon >/tmp/setup_clamav.log 2>&1; echo "apt exit=$?"
+  systemctl stop clamav-freshclam 2>/dev/null; freshclam >>/tmp/setup_clamav.log 2>&1; echo "freshclam exit=$?"
+  grep -q '^LogSyslog true' /etc/clamav/clamd.conf || echo 'LogSyslog true' >> /etc/clamav/clamd.conf
+  systemctl enable --now clamav-daemon >>/tmp/setup_clamav.log 2>&1; sleep 15; systemctl is-active clamav-daemon; tail -3 /tmp/setup_clamav.log; }
+c_16_9(){ mark 16.9 100608 "ClamAV (clamdscan) phat hien EICAR"
+  printf '%s' 'X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*' > /tmp/lab_eicar.com
+  chmod 644 /tmp/lab_eicar.com; clamdscan /tmp/lab_eicar.com >/dev/null 2>&1; sleep 3; rm -f /tmp/lab_eicar.com; }
+c_6_10(){ mark 6.10 100376 "kill -9 clamd: systemd bao dich vu bao mat thoat bat thuong"
+  kill -9 $(pidof clamd) 2>/dev/null; sleep 8; systemctl restart clamav-daemon; }
+
 hv2_linux(){ c_2_4; pause; c_2_5; }
 
 # =====================================================================
@@ -238,9 +292,11 @@ expect eof"
   gpasswd -d labnosudo sudo >/dev/null 2>&1; }
 
 c_4_7(){ mark 4.7 "100331,100332" "tao file trong /etc/sudoers.d co NOPASSWD: ALL (FIM)"
-  echo 'labnosudo ALL=(ALL:ALL) NOPASSWD: ALL' > /etc/sudoers.d/labtest_nopw
+  echo '# lab test' > /etc/sudoers.d/labtest_nopw
   chmod 440 /etc/sudoers.d/labtest_nopw
-  sleep 5
+  sleep 8
+  echo 'labnosudo ALL=(ALL:ALL) NOPASSWD: ALL' >> /etc/sudoers.d/labtest_nopw
+  sleep 8
   rm -f /etc/sudoers.d/labtest_nopw; }
 
 hv4_linux(){ c_4_6; pause; c_4_7; }
@@ -314,6 +370,16 @@ c_12_4(){ mark 12.4 "100482,100483" "SSH root bang KHOA cong khai tu ngoai allow
   rm -f /tmp/lab_root_key /tmp/lab_root_key.pub
   root_ssh_restore; }
 
+c_12_5(){ mark 12.5 100480 "SSH root bang KHOA tu 127.0.0.1 (trong allow-list, ngoai gio 7pm-6am se ra 100483, chay sau 06:00 ngay thuong)"
+  local K=/tmp/lab12_5key AK=/root/.ssh/authorized_keys
+  rm -f $K $K.pub; ssh-keygen -q -t ed25519 -N "" -f $K
+  mkdir -p /root/.ssh; [ -f $AK ] && cp -p $AK /tmp/lab12_5.ak.bak
+  cat $K.pub >> $AK
+  ssh -i $K -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@127.0.0.1 true >/dev/null 2>&1
+  sleep 1
+  if [ -f /tmp/lab12_5.ak.bak ]; then mv /tmp/lab12_5.ak.bak $AK; else rm -f $AK; fi
+  rm -f $K $K.pub; }
+
 hv12_ok(){ c_12_2; pause; c_12_3; pause; c_12_4; }
 
 # =====================================================================
@@ -349,6 +415,17 @@ expect eof"
   iptables -D OUTPUT -p tcp --dport 1514 -j DROP 2>/dev/null || true; }
 
 hv7_linux(){ c_7_8; pause; c_7_7; }
+
+c_6_9(){ mark 6.9 100375 "sudo dung dich vu bao mat Linux (falcon-sensor gia)"
+  exp_as labsudo "spawn sudo -k systemctl stop falcon-sensor
+expect \"assword\"
+send \"$TESTPW\r\"
+expect eof" || true; }
+
+c_9_5(){ mark 9.5 100425 "sua noi dung /etc/ld.so.preload (FIM realtime, file rong san co sau setup_fim) roi tra ve rong"
+  echo '# lab' > /etc/ld.so.preload
+  sleep 6
+  : > /etc/ld.so.preload; }
 
 # =====================================================================
 # HV9 Linux - FIM file he thong quan trong (100422, 100423, 100425-100429, 100431, 100433)
@@ -422,7 +499,7 @@ c_14_6(){ mark 14.6 "100530,100531,100533" "tai khoan web www-data chay lenh ls/
   sleep 2
   rm -f /var/www/html/lab_test.php; }
 
-c_14_4(){ mark 14.4 "100520,100524,100525" "HTTP GET webshell URI + 16 POST 200 toi cmd.php (nginx)"
+c_14_4(){ mark 14.4 "100520,100524,100525" "HTTP GET webshell URI + 25 POST 200 toi cmd.php (nginx)"
   mkdir -p /var/www/html
   printf 'ok\n' > /var/www/html/cmd.php
   printf 'ok\n' > /var/www/html/index2.php
@@ -433,7 +510,7 @@ c_14_4(){ mark 14.4 "100520,100524,100525" "HTTP GET webshell URI + 16 POST 200 
   fi
   sleep 1
   curl -s "http://$SELF_IP/cmd.php?cmd=whoami" -o /dev/null
-  for i in $(seq 1 16); do
+  for i in $(seq 1 25); do
     curl -s -X POST "http://$SELF_IP/index2.php" -d "a=$i" -o /dev/null
   done
   sleep 2
@@ -459,14 +536,14 @@ case "${1:-}" in
   prep) do_prep ;; clean) do_clean ;; all) run_all ;; linux_extra) linux_extra ;; chang3) chang3_linux ;;
   hv13) hv13 ;; hv12) hv12 ;; hv12_ok) hv12_ok ;; hv5) hv5_linux ;;
   hv2) hv2_linux ;; hv3) hv3_linux ;; hv4) hv4_linux ;; hv7) hv7_linux ;; hv9) hv9_linux ;; hv10) hv10_linux ;; hv14) hv14_linux ;; hv15) hv15_linux ;;
-  1.5) c_1_5 ;; 2.4) c_2_4 ;; 2.5) c_2_5 ;;
+  1.5) c_1_5 ;; 2.4) c_2_4 ;; 2.5) c_2_5 ;; 2.6) c_2_6 ;; 16.9) c_16_9 ;; 6.10) c_6_10 ;; setup_clamav) setup_clamav ;; setup_fim) setup_fim ;; setup_whodata) setup_whodata ;; 14.9) c_14_9 ;; 15.9) c_15_9 ;; 14.10) c_14_10 ;; setup_show_syscheck) setup_show_syscheck ;; 2.7) c_2_7 ;; 2.8) c_2_8 ;; 1.7) c_1_7 ;;
   3.9) c_3_9 ;; 3.10) c_3_10 ;; 3.11) c_3_11 ;;
   4.6) c_4_6 ;; 4.7) c_4_7 ;;
   5.11) c_5_11 ;; 5.12) c_5_12 ;;
-  7.7) c_7_7 ;; 7.8) c_7_8 ;;
+  7.7) c_7_7 ;; 7.8) c_7_8 ;; 6.9) c_6_9 ;; 9.5) c_9_5 ;;
   9.1) c_9_1 ;; 9.3) c_9_3 ;; 9.4) c_9_4 ;; 9.6) c_9_6 ;; 9.7) c_9_7 ;; 9.8) c_9_8 ;; 9.9) c_9_9 ;;
   10.8) c_10_8 ;; 10.9) c_10_9 ;;
-  12.1) c_12_1 ;; 12.2) c_12_2 ;; 12.3) c_12_3 ;; 12.4) c_12_4 ;;
+  12.1) c_12_1 ;; 12.2) c_12_2 ;; 12.3) c_12_3 ;; 12.4) c_12_4 ;; 12.5) c_12_5 ;;
   13.1) c_13_1 ;; 13.2) c_13_2 ;; 13.3) c_13_3 ;; 13.4) c_13_4 ;;
   13.5) c_13_5 ;; 13.6) c_13_6 ;; 13.7) c_13_7 ;; 13.8) c_13_8 ;;
   14.1) c_14_1 ;; 14.2) c_14_2 ;; 14.3) c_14_3 ;; 14.4) c_14_4 ;; 14.6) c_14_6 ;;

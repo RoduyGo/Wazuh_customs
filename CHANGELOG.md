@@ -186,3 +186,21 @@ Nhánh `ai/20261124-hv7-hv14-hv5-hv11`.
   - `100465`/`100466` nếu gọi `cmd.exe` từ `powershell.exe` sẽ bị `92004` nuốt `61603`; chạy trực tiếp qua `cmd.exe` sẽ nổ đúng `100465`/`100466`.
   - `100467` (WinRM) bị `AccessDenied` qua phiên SSH key không có vé Kerberos; `100601` bị `100600` (MD5) khớp trước trên cùng tệp mẫu; `100608` chưa cài ClamAV trên `ubuntu-lab`.
 - Đã tự động chụp Dashboard và dán thêm 5 ảnh (`7.7`, `7.8`, `14.6`, `5.4`, `11.1`) vào Google Docs (tổng **93 ảnh** trên **16 / 16 Google Docs**), đồng thời điền tự động **mục IV (Bảng ghi kết quả)** cho toàn bộ **16 / 16 Google Docs** (bao gồm tạo mới bảng 9×5 còn thiếu ở HV13).
+
+---
+
+## 2026-11-25 — Cụm 1: sửa rule bị che, trigger thêm HV1/2/3/4/6/11/14
+
+Nhánh `ai/20261125-cum1-trigger`. Bản gốc mỗi file được sao lưu trên manager thành `*.bak-20261125` (hoặc `.bak2-`, `.bak3-`).
+- **`brute_force_failure.xml` (100114, 100117, 100119), `brute_force_success.xml` (100123, 100124, 100125), `webshell_command_exec.xml` (100525):** đổi `if_matched_group` sang `if_matched_sid` (100112, 100114, 100520). Lý do: rule tần suất chỉ dùng `if_matched_group` không được xét trên manager (cùng bẫy với 100487/100488). Bằng chứng: 100114, 100123, 100124 bắn thật sau khi sửa; trước đó chỉ ra 100112.
+- **`webshell_command_exec.xml` (100525):** thay `<same_field>url</same_field>` bằng `<same_url />`, vì `url` là trường tĩnh nên `same_field` không so khớp được. Bằng chứng: 100525 bắn sau khi 25 POST tới `/index2.php`.
+- **`fim_critical_files.xml` (100420):** bỏ `sudoers` và `sudoers.d` khỏi regex, vì 100420 bắt trước làm 100331/100332 không bao giờ được xét. Bằng chứng: 100331 và 100332 bắn ở ca 4.7 (tạo rồi sửa file `/etc/sudoers.d/labtest_nopw`). Lưu ý: không treo 100331 dưới 100420 bằng `if_sid`, vì 100420 nạp sau nên 100332 bị bỏ qua (cảnh báo 7619).
+- **CDB list (người dùng cho phép, chỉ để thử):** thêm `Win10-agent:lab-temp` vào `soc-account-admins` và `labpriv:lab-temp` vào `soc-privileged-accounts` để 100300/100301/100305 không bị 100303/100304 chèn. Bằng chứng: 100300, 100301, 100305 bắn.
+- **Agent win10 (013):** bỏ `EventID != 5145` khỏi query Security trong `ossec.conf` (sao lưu `.bak-20261125`) để có Event 5145. Bằng chứng: 100477 bắn.
+- **Trigger mới:** `ubuntu-trigger.sh` thêm 2.6, 2.7, 2.8, 1.7, 12.5, 6.9, 9.5; sửa 4.7 (tạo rồi sửa file) và 14.4 (25 POST). `win-trigger.ps1` thêm 1.6, 1.8, 3.8, 3.9, 11.7.
+- **Quyền sudo tạm trên manager:** thêm `/etc/sudoers.d/claude-deploy` (chỉ các lệnh deploy cho `nms`). Phải xóa khi chốt dự án, cùng `claude-read` và `/etc/sudoers.d/trigger` trên ubuntu-lab.
+- **100118:** đổi sang `if_matched_sid 100110` (đếm riêng 100110), ca `1.8` 34 lần sai cách 30 giây. Bắn thật.
+- **Agent ubuntu-lab (014):** thêm `setup_fim` (FIM realtime `/etc/ld.so.preload`, file rỗng sẵn), `setup_whodata` (`/var/www/html` chuyển sang `whodata` vì FIM realtime không có `process_name` nên list `soc-web-deploy-processes` làm 100521–100523/100533 không khớp), `setup_clamav` (cài ClamAV, `LogSyslog true`). Sao lưu `ossec.conf.bak-20261125`, `.bak2-20261125`. Bắn thật thêm 100425, 100521, 100522, 100523, 100533, 100608, 100376.
+- **Win10 (013):** cài IIS + ASP, PsExec thật (`C:\PsExec.exe`), thêm `Print Spooler/Telephony/Windows Search` vào `soc-security-services` (tên hiển thị, không phải tên dịch vụ). Bắn thật 100526–100529, 100532, 100471, 100373.
+- **Chưa đạt, ghi nhận:** 100480 không thể bắn theo thiết kế (mọi lần root vào SSH đều khớp một rule con 100481–100485 hoặc 100486); 100371 (Windows không sinh Event 7036), 100372 (Event 7034 không về manager), 100602 (Sysmon không báo OriginalFileName của exe tự biên dịch), 100463 (PSEXESVC cục bộ chưa sinh 92068), 100550/100552 (auditd tạm bật chưa ra rule).
+- **Lưu ý vận hành:** restart manager xóa trạng thái đếm của rule tần suất đang chạy; gom thay đổi manager trước khi chạy ca dài.

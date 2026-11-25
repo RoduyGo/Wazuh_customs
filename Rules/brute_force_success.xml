@@ -66,7 +66,7 @@
   <!--Phát hiện login SSH thành công từ một IP sau 5 lần sai liên tục trên bất kì máy linux nào -->
   <rule id="100123" level="13" frequency="6" timeframe="600">
     <if_sid>5715,40112</if_sid>
-    <if_matched_group>soc_logon_fail_linux</if_matched_group>
+    <if_matched_sid>100112</if_matched_sid>
     <same_source_ip />
     <global_frequency />
     <list field="srcip" lookup="not_address_match_key">etc/lists/soc-allow-ip</list>
@@ -80,7 +80,7 @@
   <!-- Phát hiện đăng nhập thành công từ một tài khoản sau 10 lần sai liên tục -->
   <rule id="100124" level="13" frequency="11" timeframe="900">
     <if_sid>5715,40112</if_sid>
-    <if_matched_group>soc_logon_fail_linux</if_matched_group>
+    <if_matched_sid>100112</if_matched_sid>
     <same_user />
     <global_frequency />
     <list field="user" lookup="not_match_key">etc/lists/soc-allow-account</list>
@@ -95,7 +95,7 @@
   <!-- frequency="2": sự kiện đăng nhập hiện tại cộng một cảnh báo soc_bf_alert_linux trước đó (cần thử bằng wazuh-logtest) -->
   <rule id="100125" level="13" frequency="2" timeframe="3600">
     <if_sid>5715,40112</if_sid>
-    <if_matched_group>soc_bf_alert_linux</if_matched_group>
+    <if_matched_sid>100114</if_matched_sid>
     <same_source_ip />
     <global_frequency />
     <list field="srcip" lookup="not_address_match_key">etc/lists/soc-allow-ip</list>
