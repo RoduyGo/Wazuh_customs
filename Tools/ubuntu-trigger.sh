@@ -230,10 +230,45 @@ c_14_10(){ mark 14.10 "100521,100522" "tao file PHP vo hai roi sua noi dung vo h
   printf '// them dong\n' >> /var/www/html/lab_benign.php; sleep 6
   rm -f /var/www/html/lab_benign.php; sleep 3; }
 c_15_9(){ mark 15.9 "100549,100550,100551,100552" "bat tam auditd connect (khoa soc_outbound_connect), chay 15.8, roi go lai de tranh nhieu"
-  printf '%s\n' '-a always,exit -F arch=b64 -S connect -F a2=16 -F success=1 -k soc_outbound_connect' > /etc/audit/rules.d/99-soc-outbound.rules
+  printf '%s\n' '-a always,exit -F arch=b64 -S connect -F a2=16 -k soc_outbound_connect' > /etc/audit/rules.d/99-soc-outbound.rules
   augenrules --load >/dev/null 2>&1; sleep 3
   c_15_8; sleep 8
   rm -f /etc/audit/rules.d/99-soc-outbound.rules; augenrules --load >/dev/null 2>&1; }
+setup_audit_show(){ auditctl -l 2>&1 | head -20; auditctl -s 2>&1 | head -3; ls /etc/audit/rules.d; }
+setup_whodata2(){ cp -p /var/ossec/etc/ossec.conf /var/ossec/etc/ossec.conf.bak3-20261125
+  mkdir -p /usr/lib/modules/0.0-lab
+  sed -i 's|realtime="yes" report_changes="yes">/etc/sudoers.d,/etc/cron.d,/etc/systemd/system<|whodata="yes" report_changes="yes">/etc/sudoers.d,/etc/cron.d,/etc/systemd/system<|' /var/ossec/etc/ossec.conf
+  grep -q 'usr/lib/modules/0.0-lab' /var/ossec/etc/ossec.conf || sed -i 's|</syscheck>|  <directories whodata="yes" report_changes="yes">/etc/passwd,/etc/group,/etc/shadow,/etc/gshadow,/usr/lib/x86_64-linux-gnu/security,/usr/lib/modules/0.0-lab</directories>\n  </syscheck>|' /var/ossec/etc/ossec.conf
+  systemctl restart wazuh-agent; sleep 10; systemctl is-active wazuh-agent; grep -n 'whodata' /var/ossec/etc/ossec.conf; }
+c_9_15(){ mark 9.15 "100421,100316" "useradd/userdel (cong cu chuan -> 100421) va ghi thang vao /etc/passwd bang shell, sed (-> 100316)"
+  useradd -M -N -s /usr/sbin/nologin labfim1 2>/dev/null; sleep 5; userdel labfim1 2>/dev/null; sleep 5
+  printf 'labfake:x:59999:59999::/nonexistent:/usr/sbin/nologin\n' >> /etc/passwd; sleep 6
+  sed -i '/^labfake:/d' /etc/passwd; sleep 4; }
+c_9_16(){ mark 9.16 "100424,100434" "chep file .so vao thu muc PAM (100424) va apt cai libpam-cap (dpkg -> 100434)"
+  D=/usr/lib/x86_64-linux-gnu/security
+  cp $D/pam_permit.so $D/lab_pam.so; sleep 6; rm -f $D/lab_pam.so; sleep 4
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get install -y libpam-cap >/tmp/lab_pamcap.log 2>&1; sleep 6
+  apt-get purge -y libpam-cap >>/tmp/lab_pamcap.log 2>&1; sleep 4; }
+c_9_17(){ mark 9.17 "100430" "them mot byte vao /usr/bin/vdir roi khoi phuc (file he thong hay bi trojan)"
+  cp -p /usr/bin/vdir /tmp/vdir.lab.bak; echo >> /usr/bin/vdir; sleep 8
+  cp -p /tmp/vdir.lab.bak /usr/bin/vdir; rm -f /tmp/vdir.lab.bak; sleep 4; }
+c_9_18(){ mark 9.18 "100432" "tao file .ko gia trong /usr/lib/modules/0.0-lab roi xoa"
+  : > /usr/lib/modules/0.0-lab/lab.ko; sleep 6; rm -f /usr/lib/modules/0.0-lab/lab.ko; sleep 3; }
+c_10_11(){ mark 10.11 "100459" "apt cai sysstat (ghi /etc/cron.d/sysstat qua dpkg) roi go"
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get install -y sysstat >/tmp/lab_sysstat.log 2>&1; sleep 8
+  apt-get purge -y sysstat >>/tmp/lab_sysstat.log 2>&1; sleep 4; }
+c_15_11(){ mark 15.11 "100552" "execve co doi so /dev/tcp/... (khong khoang trang de auditd khong ma hoa hex), khong ket noi that"
+  bash -c /dev/tcp/1.1.1.1/4444 >/dev/null 2>&1; sleep 3
+  bash -c /dev/udp/1.1.1.1/4444 >/dev/null 2>&1; sleep 3; }
+c_15_10(){ mark 15.10 "100551" "bat tam auditd connect; binary /tmp ket noi ra ngoai (chi mot ket noi)"
+  printf '%s\n' '-a always,exit -F arch=b64 -S connect -F a2=16 -k soc_outbound_connect' > /etc/audit/rules.d/99-soc-outbound.rules
+  augenrules --load >/dev/null 2>&1; sleep 3
+  cp /usr/bin/curl /tmp/lab_tmp_curl && chmod +x /tmp/lab_tmp_curl; /tmp/lab_tmp_curl -s -m 2 telnet://127.0.0.1:22 </dev/null -o /dev/null 2>/dev/null || true
+  sleep 6; rm -f /tmp/lab_tmp_curl /etc/audit/rules.d/99-soc-outbound.rules; augenrules --load >/dev/null 2>&1; }
+c_2_9(){ mark 2.9 "100121" "SSH tu ubuntu-lab vao DC01 bang labuser6 (IP khac IP dung sai) sau khi Win10 sai 12 lan (chay win-trigger 2.9 truoc)"
+  sshpass -p "$TESTPW" ssh -o PreferredAuthentications=password -o StrictHostKeyChecking=no -o ConnectTimeout=8 -l "labuser6@roduygolab.nms" 192.168.19.131 "whoami" >/tmp/c29.log 2>&1; chmod 644 /tmp/c29.log; }
 setup_clamav(){ export DEBIAN_FRONTEND=noninteractive
   apt-get install -y clamav clamav-daemon >/tmp/setup_clamav.log 2>&1; echo "apt exit=$?"
   systemctl stop clamav-freshclam 2>/dev/null; freshclam >>/tmp/setup_clamav.log 2>&1; echo "freshclam exit=$?"
@@ -388,7 +423,7 @@ hv12_ok(){ c_12_2; pause; c_12_3; pause; c_12_4; }
 c_15_8(){ mark 15.8 "100549,100550,100551,100552" "bash + binary trong /tmp ket noi ra ngoai + chuoi reverse shell (auditd)"
   bash -c 'timeout 3 bash -c "exec 3<>/dev/tcp/1.1.1.1/443" 2>/dev/null || true'
   cp /usr/bin/curl /tmp/lab_tmp_curl 2>/dev/null && chmod +x /tmp/lab_tmp_curl
-  /tmp/lab_tmp_curl -s -m 3 https://1.1.1.1 -o /dev/null 2>/dev/null || true
+  /tmp/lab_tmp_curl -s -m 2 telnet://127.0.0.1:22 </dev/null -o /dev/null 2>/dev/null || true
   rm -f /tmp/lab_tmp_curl
   bash -c 'echo "/dev/tcp/1.1.1.1/4444" >/dev/null'
   nc.traditional -e /bin/true 127.0.0.1 9 >/dev/null 2>&1 || true; }
@@ -536,7 +571,7 @@ case "${1:-}" in
   prep) do_prep ;; clean) do_clean ;; all) run_all ;; linux_extra) linux_extra ;; chang3) chang3_linux ;;
   hv13) hv13 ;; hv12) hv12 ;; hv12_ok) hv12_ok ;; hv5) hv5_linux ;;
   hv2) hv2_linux ;; hv3) hv3_linux ;; hv4) hv4_linux ;; hv7) hv7_linux ;; hv9) hv9_linux ;; hv10) hv10_linux ;; hv14) hv14_linux ;; hv15) hv15_linux ;;
-  1.5) c_1_5 ;; 2.4) c_2_4 ;; 2.5) c_2_5 ;; 2.6) c_2_6 ;; 16.9) c_16_9 ;; 6.10) c_6_10 ;; setup_clamav) setup_clamav ;; setup_fim) setup_fim ;; setup_whodata) setup_whodata ;; 14.9) c_14_9 ;; 15.9) c_15_9 ;; 14.10) c_14_10 ;; setup_show_syscheck) setup_show_syscheck ;; 2.7) c_2_7 ;; 2.8) c_2_8 ;; 1.7) c_1_7 ;;
+  1.5) c_1_5 ;; 2.4) c_2_4 ;; 2.5) c_2_5 ;; 2.6) c_2_6 ;; 16.9) c_16_9 ;; 6.10) c_6_10 ;; setup_clamav) setup_clamav ;; setup_fim) setup_fim ;; setup_whodata2) setup_whodata2 ;; 9.15) c_9_15 ;; 9.16) c_9_16 ;; 9.17) c_9_17 ;; 9.18) c_9_18 ;; 10.11) c_10_11 ;; setup_audit_show) setup_audit_show ;; setup_whodata) setup_whodata ;; 14.9) c_14_9 ;; 15.9) c_15_9 ;; 2.9) c_2_9 ;; 15.10) c_15_10 ;; 15.11) c_15_11 ;; 14.10) c_14_10 ;; setup_show_syscheck) setup_show_syscheck ;; 2.7) c_2_7 ;; 2.8) c_2_8 ;; 1.7) c_1_7 ;;
   3.9) c_3_9 ;; 3.10) c_3_10 ;; 3.11) c_3_11 ;;
   4.6) c_4_6 ;; 4.7) c_4_7 ;;
   5.11) c_5_11 ;; 5.12) c_5_12 ;;

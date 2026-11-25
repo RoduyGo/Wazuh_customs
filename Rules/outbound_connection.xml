@@ -180,6 +180,7 @@
 
   <!-- Tương quan diện rộng: Phát hiện nhiều cảnh báo kết nối C2/reverse shell lặp lại 5 lần trong 10 phút trên toàn hệ thống (khớp chuỗi con soc_c2_alert) -->
   <rule id="100553" level="14" frequency="5" timeframe="600">
+    <if_sid>100550,100551,100552</if_sid>
     <if_matched_group>soc_c2_alert</if_matched_group>
     <global_frequency />
     <description>WARNING: Multiple C2 or reverse shell connection alerts (5 events in 10 minutes) detected across monitored hosts.</description>

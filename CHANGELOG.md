@@ -204,3 +204,17 @@ Nhánh `ai/20261125-cum1-trigger`. Bản gốc mỗi file được sao lưu trê
 - **Win10 (013):** cài IIS + ASP, PsExec thật (`C:\PsExec.exe`), thêm `Print Spooler/Telephony/Windows Search` vào `soc-security-services` (tên hiển thị, không phải tên dịch vụ). Bắn thật 100526–100529, 100532, 100471, 100373.
 - **Chưa đạt, ghi nhận:** 100480 không thể bắn theo thiết kế (mọi lần root vào SSH đều khớp một rule con 100481–100485 hoặc 100486); 100371 (Windows không sinh Event 7036), 100372 (Event 7034 không về manager), 100602 (Sysmon không báo OriginalFileName của exe tự biên dịch), 100463 (PSEXESVC cục bộ chưa sinh 92068), 100550/100552 (auditd tạm bật chưa ra rule).
 - **Lưu ý vận hành:** restart manager xóa trạng thái đếm của rule tần suất đang chạy; gom thay đổi manager trước khi chạy ca dài.
+
+
+---
+
+## 2026-11-25 (tiếp) — Cụm 2: sửa lỗi rule bị che và mở rộng môi trường
+
+Nhánh `ai/20261125-cum2-rules`. Sao lưu manager: `defender_edr_disable.xml.bak-20261125`, `outbound_connection.xml.bak-20261125c`; list `*.bak-20261125`.
+- **`defender&edr_disable.xml` (100372):** regex `^703[14]$` dùng kiểu mặc định (OS_Regex) không hỗ trợ lớp ký tự `[14]`, nên không bao giờ khớp. Đổi thành `^7031$|^7034$`. Bằng chứng: 100372 bắn (DC01, Event 7034). Đã quét các rule khác, không còn lỗi tương tự.
+- **`outbound_connection.xml` (100553):** thêm `<if_sid>100550,100551,100552</if_sid>`. Rule tương quan không có `if_sid` chiếm ngay sự kiện đầu tiên nên 100550/100551/100552 không hiện. Bằng chứng: 100550, 100551, 100552 bắn. Lưu ý: nếu 100553 vẫn chiếm (lịch sử đếm trong bộ nhớ), restart manager rồi chạy ca ngay.
+- **Agent ubuntu-lab:** `setup_whodata2` (whodata cho `/etc/sudoers.d,/etc/cron.d,/etc/systemd/system`, `/etc/passwd,group,shadow,gshadow`, thư mục PAM, `/usr/lib/modules/0.0-lab`). Bắn thật 100316, 100424, 100430, 100432, 100434, 100459.
+- **Agent win10:** FIM realtime cho `drivers\etc`, `ossec.conf`, `System32\lab_new.*`; `wfp_on/wfp_off` bật/tắt Event 5156 tạm thời. Bắn thật 100435, 100387, 100438.
+- **Mới bắn thật:** 100371, 100372 (DC01), 100463 (PsExec `-s whoami.exe`, vì cmd bị 92052 chiếm), 100602 (`chisel.exe` tự biên dịch; `mimikatz.exe` bị Defender chặn; phải chạy khi không có cảnh báo tắt Defender trong 15 phút, nếu không 100612 chiếm), 100307, 100322, 100468, 100353, 100379, 100392, 100409, 100410, 100121, 100550, 100551, 100552.
+- **CDB list thử (chỉ lab):** `soc-defender-expected-off`, `soc-agent-maint-hosts`, `soc-imaging-hosts` thêm `DESKTOP-GP6L2M8`; `soc-agent-admins` thêm `labsudo`; `soc-critical-agents` thêm `ubuntu-lab`; `soc-security-services` thêm `Print Spooler`, `Telephony`, `Windows Search`.
+- **Chưa đạt:** 100480 (thiết kế), 100408 (FIM không báo file `.evtx` tạo trong thư mục thử), 100541/100604/100545 (Event 5156 có trong Security log nhưng chưa thành cảnh báo), 100421 (whodata không ghi `useradd`), 100354/100355/100358 (cần Sysmon for Linux), 100606/100607 (VirusTotal/YARA), 100484 (cuối tuần), nhóm còn lại.
