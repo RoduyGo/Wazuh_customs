@@ -134,7 +134,7 @@ function c_14_8(){ Mark 14.8 "100526,100527,100528,100529,100532" "IIS: w3wp.exe
 
 function c_11_8(){ Mark 11.8 "100463,100471" "PsExec that: chay cuc bo -s (PSEXESVC sinh cmd => 100463) va ban doi ten khong co dich \\host (=> 100471)"
   New-Item -ItemType Directory -Force -Path C:\LabTools | Out-Null
-  Run "C:\PsExec.exe -accepteula -nobanner -s cmd.exe /c whoami"; Start-Sleep 4
+  Run "C:\PsExec.exe -accepteula -nobanner -s whoami.exe"; Start-Sleep 4
   Copy-Item C:\PsExec.exe C:\LabTools\svcupd.exe -Force
   Run "C:\LabTools\svcupd.exe -accepteula -nobanner -?"; Start-Sleep 2
   Remove-Item C:\LabTools\svcupd.exe -Force -ErrorAction SilentlyContinue }
@@ -146,14 +146,94 @@ function c_6_11(){ Mark 6.11 "100371,100372,100373" "dich vu bao mat gia (Teleph
   Run "taskkill /f /im SearchIndexer.exe"; Start-Sleep 5
   Run "sc.exe failure WSearch reset= 86400 actions= restart/60000/restart/60000//"; Run "sc.exe start WSearch" }
 
-function c_16_10(){ Mark 16.10 "100602" "chay file .exe co OriginalFileName=mimikatz.exe (chuong trinh rong tu bien dich)"
+function c_16_10(){ Mark 16.10 "100602" "chay file .exe co OriginalFileName=chisel.exe (Defender chan ten mimikatz) (chuong trinh rong tu bien dich)"
   $d="C:\LabTools"; New-Item -ItemType Directory -Force -Path $d | Out-Null
   $src="$d\lab_empty.cs"; Set-Content $src 'class P{static void Main(){}}' -Encoding Ascii
   $csc = "$env:windir\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
-  & $csc /nologo /out:"$d\mimikatz.exe" $src | Out-Null
-  Run "C:\LabTools\mimikatz.exe"; Start-Sleep 3
-  Remove-Item "$d\mimikatz.exe","$src" -Force -ErrorAction SilentlyContinue }
+  & $csc /nologo /out:"$d\chisel.exe" $src | Out-Null
+  Run "C:\LabTools\chisel.exe"; Start-Sleep 3
+  Remove-Item "$d\chisel.exe","$src" -Force -ErrorAction SilentlyContinue }
 
+# ---- FIM / WFP tam thoi cho cac ca bo sung (setup_fim_win bat mot lan; wfp_on / wfp_off bat tat Event 5156) ----
+$OSSEC = "C:\Program Files (x86)\ossec-agent\ossec.conf"
+function setup_fim_win(){
+  Copy-Item $OSSEC ($OSSEC + ".bak-20261125b") -Force
+  $t = [IO.File]::ReadAllText($OSSEC)
+  $t = $t.Replace('<directories recursion_level="0">%WINDIR%\System32\drivers\etc</directories>','<directories realtime="yes" recursion_level="0">%WINDIR%\System32\drivers\etc</directories>')
+  if($t -notmatch 'lab_new'){
+    $add = '  <directories realtime="yes" recursion_level="0" restrict="lab_x.evtx$">%WINDIR%\System32\winevt\Logs</directories>' + "`r`n" +
+           '  <directories realtime="yes" recursion_level="0" restrict="lab_new.dll$|lab_new.exe$">%WINDIR%\System32</directories>' + "`r`n" +
+           '  <directories realtime="yes" recursion_level="0" restrict="ossec.conf$">C:\Program Files (x86)\ossec-agent</directories>' + "`r`n"
+    $t = $t.Replace('</syscheck>', $add + '</syscheck>')
+  }
+  [IO.File]::WriteAllText($OSSEC,$t,(New-Object Text.UTF8Encoding($false)))
+  Restart-Service WazuhSvc -ErrorAction SilentlyContinue; Start-Sleep 5; if((Get-Service WazuhSvc).Status -ne 'Running'){ Start-Service WazuhSvc }; Start-Sleep 3; (Get-Service WazuhSvc).Status }
+function setup_fim_win2(){
+  $t = [IO.File]::ReadAllText($OSSEC)
+  $t = $t.Replace('restrict="^lab.*\.evtx$"','restrict="lab_x.evtx$"').Replace('restrict="^lab_new.*\.(dll|exe|sys)$|^sethc\.exe$"','restrict="lab_new.dll$|lab_new.exe$"').Replace('restrict="^ossec\.conf$"','restrict="ossec.conf$"')
+  [IO.File]::WriteAllText($OSSEC,$t,(New-Object Text.UTF8Encoding($false)))
+  Restart-Service WazuhSvc -ErrorAction SilentlyContinue; Start-Sleep 5; if((Get-Service WazuhSvc).Status -ne 'Running'){ Start-Service WazuhSvc }; Start-Sleep 3; (Get-Service WazuhSvc).Status }
+function setup_fim_win3(){
+  New-Item -ItemType Directory -Force -Path "C:\LabFim\winevt\Logs" | Out-Null
+  $t = [IO.File]::ReadAllText($OSSEC)
+  if($t -notmatch 'LabFim'){ $t = $t.Replace('</syscheck>','  <directories realtime="yes" recursion_level="0">C:\LabFim\winevt\Logs</directories>' + "`r`n" + '</syscheck>') }
+  [IO.File]::WriteAllText($OSSEC,$t,(New-Object Text.UTF8Encoding($false)))
+  Restart-Service WazuhSvc; Start-Sleep 10; (Get-Service WazuhSvc).Status }
+function wfp_on(){
+  Copy-Item $OSSEC ($OSSEC + ".bak-wfp") -Force
+  $t = [IO.File]::ReadAllText($OSSEC); $t = $t.Replace('EventID != 5156 and ','')
+  [IO.File]::WriteAllText($OSSEC,$t,(New-Object Text.UTF8Encoding($false)))
+  & auditpol /set /subcategory:"Filtering Platform Connection" /success:enable | Out-Null
+  Restart-Service WazuhSvc -ErrorAction SilentlyContinue; Start-Sleep 5; if((Get-Service WazuhSvc).Status -ne 'Running'){ Start-Service WazuhSvc }; Start-Sleep 3; (Get-Service WazuhSvc).Status }
+function wfp_off(){
+  if(Test-Path ($OSSEC + ".bak-wfp")){ Copy-Item ($OSSEC + ".bak-wfp") $OSSEC -Force }
+  & auditpol /set /subcategory:"Filtering Platform Connection" /success:disable | Out-Null
+  Restart-Service WazuhSvc -ErrorAction SilentlyContinue; Start-Sleep 5; if((Get-Service WazuhSvc).Status -ne 'Running'){ Start-Service WazuhSvc }; Start-Sleep 3; (Get-Service WazuhSvc).Status }
+
+function c_9_19(){ Mark 9.19 "100435,100387" "them dong chu thich vao hosts va ossec.conf roi hoan tac (FIM realtime)"
+  $h="C:\Windows\System32\drivers\etc\hosts"; Copy-Item $h "$env:TEMP\hosts.lab.bak" -Force
+  Add-Content $h "# lab-fim" ; Start-Sleep 6; Copy-Item "$env:TEMP\hosts.lab.bak" $h -Force
+  Add-Content $OSSEC "<!-- lab-fim -->"; Start-Sleep 6
+  $t=[IO.File]::ReadAllText($OSSEC); $t=$t.Replace("<!-- lab-fim -->`r`n",""); $t=$t.Replace("<!-- lab-fim -->","")
+  [IO.File]::WriteAllText($OSSEC,$t,(New-Object Text.UTF8Encoding($false))); Start-Sleep 4 }
+function c_9_20(){ Mark 9.20 "100408,100438" "tao roi xoa lab_x.evtx trong winevt\Logs (100408) va lab_new.dll trong System32 (100438)"
+  $e="C:\LabFim\winevt\Logs\lab_x.evtx"; Set-Content $e "x" -Encoding Ascii; Start-Sleep 6; Remove-Item $e -Force; Start-Sleep 4
+  $d="C:\Windows\System32\lab_new.dll"; Set-Content $d "x" -Encoding Ascii; Start-Sleep 6; Remove-Item $d -Force; Start-Sleep 4 }
+function c_4_10(){ Mark 4.10 "100322" "them labgrp vao Administrators boi Win10-agent (nam trong soc-account-admins)"
+  Run "net localgroup Administrators labgrp /add"; Start-Sleep 3; Run "net localgroup Administrators labgrp /delete" }
+function c_3_10(){ Mark 3.10 "100307" "bat roi tat lai tai khoan Administrator RID 500"
+  Run "net user Administrator $PW /active:yes"; Start-Sleep 3; Run "net user Administrator /active:no" }
+function c_11_9(){ Mark 11.9 "100468" "mmc.exe (ban sao cmd doi ten) khoi chay cmd.exe"
+  New-Item -ItemType Directory -Force -Path C:\LabTools | Out-Null
+  Copy-Item C:\Windows\System32\cmd.exe C:\LabTools\mmc.exe -Force
+  Run 'C:\LabTools\mmc.exe /c "C:\Windows\System32\cmd.exe /c echo lab"'; Start-Sleep 3
+  Remove-Item C:\LabTools\mmc.exe -Force -ErrorAction SilentlyContinue }
+
+function c_6_12(){ Mark 6.12 "100370,100379" "lenh dung WinDefend tren may nam trong soc-defender-expected-off (Windows se tu choi)"
+  Run "sc.exe stop WinDefend"; Start-Sleep 3 }
+function c_7_11(){ Mark 7.11 "100385,100392" "chuoi dung dich vu WazuhSvc trong if(false) tren may nam trong soc-agent-maint-hosts"
+  Run "powershell.exe -NoProfile -Command `"if (`$false) { Stop-Service WazuhSvc }`""; Start-Sleep 3 }
+function c_8_9(){ Mark 8.9 "100401,100409,100410" "xoa log 'Windows PowerShell' boi tai khoan quan tri trong list, tren may nam trong soc-imaging-hosts"
+  Run "wevtutil cl ""Windows PowerShell"""; Start-Sleep 3 }
+function c_5_13(){ Mark 5.13 "100353" "chuoi tai-va-chay tu chocolatey nam trong if(false) (khong chay that)"
+  Run "powershell.exe -NoProfile -Command `"if (`$false) { iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1')) }`""; Start-Sleep 3 }
+function c_5_14(){ Mark 5.14 "100351" "PowerShell tao file __PSScriptPolicyTest trong Temp"
+  Run "powershell.exe -NoProfile -Command `"Set-Content ([IO.Path]::Combine(`$env:TEMP,'__PSScriptPolicyTest_ab12cd34.abc.ps1')) 'x'; Remove-Item ([IO.Path]::Combine(`$env:TEMP,'__PSScriptPolicyTest_ab12cd34.abc.ps1')) -Force`""; Start-Sleep 3 }
+function c_2_9(){ Mark 2.9 "100121" "12 lan sai tu Win10 vao DC01 (labuser6), dang nhap dung tu ubuntu-lab (IP khac => 100120 khong chen)"
+  1..12 | ForEach-Object { Run ('net use \\{0}\IPC$ /user:{1}\labuser6 Sai{2}' -f $DC,$DOM,$_) }
+  Run "net use * /delete /y" }
+
+function c_8_10(){ Mark 8.10 "100410" "xoa log 'Windows PowerShell' bang SYSTEM (khong nam trong soc-account-admins) tren may trong soc-imaging-hosts"
+  Run "schtasks /create /tn labclr /tr ""wevtutil cl \""Windows PowerShell\"""" /sc once /st 23:59 /ru SYSTEM /f"
+  Run "schtasks /run /tn labclr"; Start-Sleep 8; Run "schtasks /delete /tn labclr /f" }
+function c_15_12(){ Mark 15.12 "100604,100541" "ket noi TCP toi IP IOC 203.0.113.10 (100604) va IP ngoai 1.1.1.1 (100541), can wfp_on truoc"
+  foreach($ip in '203.0.113.10','1.1.1.1'){ $c=New-Object Net.Sockets.TcpClient; try{ $ar=$c.BeginConnect($ip,80,$null,$null); [void]$ar.AsyncWaitHandle.WaitOne(3000) }catch{}; $c.Close(); Start-Sleep 2 } }
+function c_14_11(){ Mark 14.11 "100545" "IIS (w3wp) goi HTTP ra 1.1.1.1 bang MSXML2.ServerXMLHTTP"
+  $root="C:\inetpub\wwwroot\up"; New-Item -ItemType Directory -Force -Path $root | Out-Null
+  & icacls $root /grant "IIS_IUSRS:(OI)(CI)M" "IUSR:(OI)(CI)M" | Out-Null
+  Set-Content "$root\out.asp" '<% On Error Resume Next : Set x=CreateObject("MSXML2.ServerXMLHTTP") : x.setTimeouts 2000,2000,2000,2000 : x.open "GET","http://1.1.1.1/",False : x.send : Response.Write "done" %>' -Encoding Ascii
+  try { Invoke-WebRequest -UseBasicParsing "http://127.0.0.1/up/out.asp" -TimeoutSec 30 | Out-Null } catch { Write-Host $_.Exception.Message }
+  Start-Sleep 3 }
 function hv3(){ c_3_1; Pause; c_3_2; Pause; c_3_3; Pause; c_3_5; Pause; c_3_7 }
 
 # =====================================================================
@@ -386,6 +466,25 @@ switch ($cmd.ToLower()) {
   "3.5"   { c_3_5 }
   "3.7"   { c_3_7 }
   "3.8"   { c_3_8 }
+  "15.12" { c_15_12 }
+  "14.11" { c_14_11 }
+  "6.12"  { c_6_12 }
+  "7.11"  { c_7_11 }
+  "8.9"   { c_8_9 }
+  "8.10"  { c_8_10 }
+  "5.13"  { c_5_13 }
+  "5.14"  { c_5_14 }
+  "2.9"   { c_2_9 }
+  "setup_fim_win" { setup_fim_win }
+  "wfp_on" { wfp_on }
+  "setup_fim_win3" { setup_fim_win3 }
+  "setup_fim_win2" { setup_fim_win2 }
+  "wfp_off" { wfp_off }
+  "9.19"  { c_9_19 }
+  "9.20"  { c_9_20 }
+  "4.10"  { c_4_10 }
+  "3.10"  { c_3_10 }
+  "11.9"  { c_11_9 }
   "14.8"  { c_14_8 }
   "11.8"  { c_11_8 }
   "6.11"  { c_6_11 }
