@@ -1,0 +1,8 @@
+# Ignore trigger scripts folder
+Tools/
+
+# Backup & editor temporary files
+*.bak*
+*.swp
+*~
+.DS_Store
